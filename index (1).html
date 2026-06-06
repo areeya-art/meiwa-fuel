@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เติมน้ำมัน Meiwa</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; }
+.container { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem; }
+h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #1a1a1a; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+.stat { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 10px; padding: 12px; text-align: center; }
+.stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.stat-val { font-size: 20px; font-weight: 600; }
+.upload-zone { border: 1.5px dashed #ccc; border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; background: #fff; transition: background 0.15s; margin-bottom: 1rem; }
+.upload-zone:hover { background: #f9f9f9; }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.upload-sub { font-size: 13px; color: #888; }
+.preview-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+.thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 0.5px solid #e0e0e0; }
+.btn-row { display: none; gap: 8px; margin-bottom: 1rem; }
+.btn { padding: 10px 20px; border-radius: 8px; border: 0.5px solid #ccc; background: #fff; font-size: 14px; cursor: pointer; font-weight: 500; transition: background 0.15s; }
+.btn:hover { background: #f5f5f5; }
+.btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; flex: 1; }
+.btn-primary:hover { background: #333; }
+.btn-primary:disabled { background: #999; border-color: #999; cursor: not-allowed; }
+.loading { display: none; text-align: center; padding: 2rem; color: #888; font-size: 14px; }
+.spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
+.card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.car-name { font-size: 16px; font-weight: 600; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+.tag-ptt { background: #e8f0fe; color: #1a56db; }
+.tag-bj { background: #e8f5e9; color: #1e7e34; }
+.tag-cx { background: #fff8e1; color: #b45309; }
+.amount { margin-left: auto; font-size: 15px; font-weight: 600; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+.field { background: #f8f8f8; border-radius: 8px; padding: 6px 10px; }
+.field-label { font-size: 10px; color: #888; margin-bottom: 2px; }
+.field-val { font-size: 12px; font-weight: 500; }
+.no-fill-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
+.export-row { display: none; gap: 8px; margin-top: 1rem; }
+.note { font-size: 12px; color: #888; margin-top: 8px; }
+.error { color: #dc2626; font-size: 13px; padding: 1rem; background: #fef2f2; border-radius: 8px; word-break: break-all; }
+@media (max-width: 400px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-val { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⛽ ระบบบันทึกน้ำมัน Meiwa</h1>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-label">รูปที่อัปโหลด</div><div class="stat-val" id="cnt-img">0</div></div>
+    <div class="stat"><div class="stat-label">รายการเติม</div><div class="stat-val" id="cnt-fill">0</div></div>
+    <div class="stat"><div class="stat-label">ไม่เติม</div><div class="stat-val" id="cnt-no">0</div></div>
+    <div class="stat"><div class="stat-label">ยอดรวม</div><div class="stat-val" id="cnt-total">฿0</div></div>
+  </div>
+  <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-in').click()" ondragover="event.preventDefault();this.style.background='#f0f0f0'" ondragleave="this.style.background='#fff'" ondrop="onDrop(event)">
+    <div class="upload-icon">📷</div>
+    <div class="upload-title">อัปโหลดรูปทั้งหมดได้เลย</div>
+    <div class="upload-sub">รูปบิล + ไมล์ก่อน + ไมล์หลัง ทุกคัน ไม่ต้องแยก</div>
+  </div>
+  <input type="file" id="file-in" accept="image/*" multiple style="display:none" onchange="onFiles(this.files)">
+  <div class="preview-row" id="preview-row"></div>
+  <div class="btn-row" id="btn-row">
+    <button class="btn btn-primary" id="analyze-btn" onclick="analyze()">🤖 วิเคราะห์ด้วย AI</button>
+    <button class="btn" onclick="resetAll()">ล้าง</button>
+  </div>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    AI กำลังอ่านรูปทั้งหมด...
+  </div>
+  <div id="results"></div>
+  <div class="export-row" id="export-row">
+    <button class="btn" style="flex:1" onclick="exportCSV('ptt')">⬇️ Export PTT (.csv)</button>
+    <button class="btn" style="flex:1" onclick="exportCSV('bj')">⬇️ Export บางจาก (.csv)</button>
+  </div>
+</div>
+<script>
+let files = [], imgData = [], parsed = [];
+
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.background = '#fff';
+  onFiles(e.dataTransfer.files);
+}
+
+function onFiles(fl) {
+  for (let f of fl) {
+    if (!f.type.startsWith('image/')) continue;
+    files.push(f);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      imgData.push({ name: f.name, b64: ev.target.result.split(',')[1], type: f.type });
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      img.className = 'thumb';
+      document.getElementById('preview-row').appendChild(img);
+    };
+    reader.readAsDataURL(f);
+  }
+  document.getElementById('cnt-img').textContent = files.length;
+  document.getElementById('btn-row').style.display = 'flex';
+}
+
+async function analyze() {
+  if (!imgData.length) return;
+  const btn = document.getElementById('analyze-btn');
+  btn.disabled = true;
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('export-row').style.display = 'none';
+
+  const content = [];
+  for (let img of imgData) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.b64 } });
+  }
+  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท อ่านรูปทั้งหมดแล้วจัดกลุ่มเป็นชุดตามทะเบียนรถ
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น แต่ละชุดมีรูปแบบ:
+[{"car":"ทะเบียนรถ","filled":true,"pump":"PTT หรือ บางจาก หรือ Caltex","date":"dd/mm/yy","invoice":"เลข invoice","total":ตัวเลข,"mile_before":ตัวเลข,"mile_after":ตัวเลข,"branch":"สาขา PTT เช่น PTT/RY/CHON","coupon":"เลขคูปองบางจาก","note":"หมายเหตุ"}]
+กฎ: ถ้าไม่มีบิล filled=false และ total/mile เป็น null, PTT อ่านไมล์จากบิล (ลูกระยะทาง KM), บางจาก/Caltex อ่านไมล์จากหน้าปัดที่มีเลขมากกว่า` });
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content }] })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
+    }
+
+    if (!data.content) {
+      throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0, 200));
+    }
+
+    const txt = data.content.map(i => i.text || '').join('').replace(/```json|```/g, '').trim();
+    parsed = JSON.parse(txt);
+    renderResults(parsed);
+
+  } catch(e) {
+    document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: ' + e.message + '</div>';
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  btn.disabled = false;
+}
+
+function renderResults(data) {
+  const filled = data.filter(d => d.filled);
+  const nofill = data.filter(d => !d.filled);
+  const total = filled.reduce((s, d) => s + (d.total || 0), 0);
+  document.getElementById('cnt-fill').textContent = filled.length;
+  document.getElementById('cnt-no').textContent = nofill.length;
+  document.getElementById('cnt-total').textContent = '฿' + total.toLocaleString();
+
+  let html = '';
+  if (filled.length) {
+    html += '<div class="section-label">รายการเติมน้ำมัน</div>';
+    for (let d of filled) {
+      const pump = d.pump || '';
+      const tagCls = pump.includes('PTT') ? 'tag-ptt' : pump.includes('บางจาก') ? 'tag-bj' : 'tag-cx';
+      html += `<div class="card">
+        <div class="card-header">
+          <span class="car-name">${d.car||'-'}</span>
+          <span class="tag ${tagCls}">${pump}</span>
+          <span class="amount">฿${(d.total||0).toLocaleString()}</span>
+        </div>
+        <div class="fields">
+          <div class="field"><div class="field-label">วันที่</div><div class="field-val">${d.date||'-'}</div></div>
+          <div class="field"><div class="field-label">ไมล์ก่อน</div><div class="field-val">${d.mile_before||'-'}</div></div>
+          <div class="field"><div class="field-label">ไมล์หลัง</div><div class="field-val">${d.mile_after||'-'}</div></div>
+          ${pump.includes('PTT') ? `<div class="field"><div class="field-label">Branch</div><div class="field-val">${d.branch||'-'}</div></div>` : ''}
+          ${pump.includes('บางจาก') ? `<div class="field"><div class="field-label">คูปอง</div><div class="field-val">${d.coupon||'-'}</div></div>` : ''}
+          <div class="field"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px">${(d.invoice||'-').substring(0,20)}</div></div>
+        </div>
+        ${d.note ? `<div class="note">${d.note}</div>` : ''}
+      </div>`;
+    }
+  }
+  if (nofill.length) {
+    html += '<div class="section-label">ไม่เติมน้ำมัน</div><div class="no-fill-grid">';
+    for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}</div>`;
+    html += '</div>';
+  }
+  document.getElementById('results').innerHTML = html;
+  if (filled.length) document.getElementById('export-row').style.display = 'flex';
+}
+
+function exportCSV(type) {
+  const filled = parsed.filter(d => d.filled);
+  let rows, header;
+  if (type === 'ptt') {
+    const list = filled.filter(d => !(d.pump||'').includes('บางจาก'));
+    header = 'DATE,INVOICE NO.,CAR,TOTAL,MILE,BRANCH';
+    rows = list.map(d => `${d.date||''},${d.invoice||''},${d.car||''},${d.total||''},${d.mile_after||''},${d.branch||''}`);
+  } else {
+    const list = filled.filter(d => (d.pump||'').includes('บางจาก'));
+    header = 'DATE,COUPON,CAR,TOTAL,MILE';
+    rows = list.map(d => `${d.date||''},${d.coupon||''},${d.car||''},${d.total||''},${d.mile_after||''}`);
+  }
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = type === 'ptt' ? 'fuel_ptt.csv' : 'fuel_bangchak.csv';
+  a.click();
+}
+
+function resetAll() {
+  files = []; imgData = []; parsed = [];
+  document.getElementById('preview-row').innerHTML = '';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('cnt-img').textContent = '0';
+  document.getElementById('cnt-fill').textContent = '0';
+  document.getElementById('cnt-no').textContent = '0';
+  document.getElementById('cnt-total').textContent = '฿0';
+  document.getElementById('btn-row').style.display = 'none';
+  document.getElementById('export-row').style.display = 'none';
+  document.getElementById('loading').style.display = 'none';
+}
+</script>
+</body>
+</html>
