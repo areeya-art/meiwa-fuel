@@ -29,6 +29,8 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .loading { display: none; text-align: center; padding: 2rem; color: #888; font-size: 14px; }
 .spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.progress-bar { width: 100%; background: #e0e0e0; border-radius: 8px; height: 6px; margin-top: 8px; }
+.progress-fill { height: 6px; background: #1a1a1a; border-radius: 8px; transition: width 0.3s; }
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
 .card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
@@ -70,7 +72,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
   <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-in').click()" ondragover="event.preventDefault();this.style.background='#f0f0f0'" ondragleave="this.style.background='#fff'" ondrop="onDrop(event)">
     <div class="upload-icon">📷</div>
     <div class="upload-title">อัปโหลดรูปทั้งหมดได้เลย</div>
-    <div class="upload-sub">รูปบิล + ไมล์ก่อน + ไมล์หลัง ทุกคัน ไม่ต้องแยก</div>
+    <div class="upload-sub">รูปบิล + ไมล์ก่อน + ไมล์หลัง ทุกคัน ไม่ต้องแยก (รองรับสูงสุด 60 รูป)</div>
   </div>
   <input type="file" id="file-in" accept="image/*" multiple style="display:none" onchange="onFiles(this.files)">
   <div class="preview-row" id="preview-row"></div>
@@ -80,7 +82,8 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
   </div>
   <div class="loading" id="loading">
     <div class="spinner"></div>
-    AI กำลังอ่านรูปทั้งหมด...
+    <div id="loading-text">กำลังประมวลผล...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
   </div>
   <div id="results"></div>
   <div class="export-row" id="export-row">
@@ -107,6 +110,10 @@ const FLEET = {
   "FORKLIFT":"โฟล์คลิฟท์","SERCOOLER":"เซอร์คูลเลอร์"
 };
 
+const BATCH_SIZE = 20;
+const MAX_IMG_SIZE = 800;
+const QUALITY = 0.7;
+
 function matchFleet(raw) {
   if (!raw) return raw;
   const clean = raw.replace(/\s/g,'').toUpperCase();
@@ -114,6 +121,25 @@ function matchFleet(raw) {
     if (clean.includes(key.replace(/\s/g,'').toUpperCase())) return val;
   }
   return raw;
+}
+
+async function compressImage(b64, type) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > MAX_IMG_SIZE || h > MAX_IMG_SIZE) {
+        if (w > h) { h = Math.round(h * MAX_IMG_SIZE / w); w = MAX_IMG_SIZE; }
+        else { w = Math.round(w * MAX_IMG_SIZE / h); h = MAX_IMG_SIZE; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', QUALITY).split(',')[1];
+      resolve({ b64: compressed, type: 'image/jpeg' });
+    };
+    img.src = 'data:' + type + ';base64,' + b64;
+  });
 }
 
 let files = [], imgData = [], parsed = [];
@@ -127,6 +153,7 @@ function onDrop(e) {
 function onFiles(fl) {
   for (let f of fl) {
     if (!f.type.startsWith('image/')) continue;
+    if (files.length >= 60) break;
     files.push(f);
     const reader = new FileReader();
     reader.onload = ev => {
@@ -142,6 +169,70 @@ function onFiles(fl) {
   document.getElementById('btn-row').style.display = 'flex';
 }
 
+const PROMPT = (fleetList) => `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทั้งหมดแล้วจัดกลุ่มตามทะเบียนรถ
+
+ทะเบียนรถ (เลขย่อ=ทะเบียนเต็ม): ${fleetList}
+เมื่อเห็นเลขย่อในรูปให้แปลงเป็นทะเบียนเต็มเสมอ
+
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น:
+[{
+  "car": "ทะเบียนเต็ม",
+  "filled": true หรือ false,
+  "pump": "PTT หรือ บางจาก หรือ KJ OIL หรือ Caltex",
+  "date": "dd/mm/yy จากบิล",
+  "invoice": "เฉพาะ PTT/Caltex: เลขที่ใบกำกับภาษีท้ายบิล ขึ้นต้นด้วย 1 ยาว 17-20 หลัก ไม่ใช่ TID/TRACE/APPR",
+  "coupon": "เฉพาะ บางจาก/KJ OIL: เลขที่ จากบิลสีเขียว ชื่อ เค เจ ออยล์",
+  "total": ยอดเงินตัวเลข,
+  "mile_after": "เฉพาะ PTT/Caltex: ไมล์หลังเติม จากบิลช่อง เลขระยะทาง(KM) หรือจากหน้าปัดที่มีเลขมากกว่า",
+  "image_problem": true ถ้ารูปไม่ชัดอ่านไม่ได้,
+  "note": "หมายเหตุ"
+}]
+
+กฎ:
+- PTT/Caltex: วันที่ + invoice(เลขยาวท้ายบิลขึ้นต้น 1) + ทะเบียน + ยอด + ไมล์หลังเติม
+- บางจาก/KJ OIL: วันที่ + คูปอง(เลขที่ในบิล) + ทะเบียน + ยอด ไม่ต้องมีไมล์
+- ไม่มีบิลหรือมีแค่รูปหน้าปัดรูปเดียว = filled:false
+- รูปหน้าปัด 2 รูปของรถเดียวกัน = รูปเลขมากกว่าคือหลังเติม ไม่นับซ้ำ
+- ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน`;
+
+async function callAPI(images) {
+  const fleetList = Object.entries(FLEET).map(([k,v]) => k+'='+v).join(', ');
+  const content = [];
+  for (let img of images) {
+    const comp = await compressImage(img.b64, img.type);
+    content.push({ type: 'image', source: { type: 'base64', media_type: comp.type, data: comp.b64 } });
+  }
+  content.push({ type: 'text', text: PROMPT(fleetList) });
+
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content }] })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
+  if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0,200));
+  const txt = data.content.map(i => i.text||'').join('').replace(/```json|```/g,'').trim();
+  return JSON.parse(txt);
+}
+
+function mergeParsed(existing, newItems) {
+  const result = [...existing];
+  for (const item of newItems) {
+    const car = matchFleet(item.car);
+    const idx = result.findIndex(r => r.car === car);
+    if (idx === -1) {
+      result.push({ ...item, car });
+    } else {
+      if (item.filled && !result[idx].filled) result[idx] = { ...item, car };
+      else if (item.filled && result[idx].filled) {
+        if ((item.mile_after || 0) > (result[idx].mile_after || 0)) result[idx] = { ...item, car };
+      }
+    }
+  }
+  return result;
+}
+
 async function analyze() {
   if (!imgData.length) return;
   const btn = document.getElementById('analyze-btn');
@@ -149,56 +240,28 @@ async function analyze() {
   document.getElementById('loading').style.display = 'block';
   document.getElementById('results').innerHTML = '';
   document.getElementById('export-row').style.display = 'none';
+  parsed = [];
 
-  const content = [];
-  for (let img of imgData) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.b64 } });
+  const batches = [];
+  for (let i = 0; i < imgData.length; i += BATCH_SIZE) {
+    batches.push(imgData.slice(i, i + BATCH_SIZE));
   }
 
-  const fleetList = Object.entries(FLEET).map(([k,v]) => k+'='+v).join(', ');
-
-  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทั้งหมดแล้วจัดกลุ่มตามทะเบียนรถ
-
-ทะเบียนรถ (เลขย่อ=ทะเบียนเต็ม): ${fleetList}
-เมื่อเห็นเลขย่อในรูปให้แปลงเป็นทะเบียนเต็มเสมอ ทะเบียนรถในป้ายหน้าปัดมักเขียนย่อ เช่น 3288 = 3ฒธ 3288
-
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่นนอกจาก JSON:
-[{
-  "car": "ทะเบียนเต็ม",
-  "filled": true หรือ false,
-  "pump": "PTT หรือ บางจาก หรือ KJ OIL หรือ Caltex",
-  "date": "dd/mm/yy จากบิล",
-  "invoice": "เฉพาะ PTT: เลขที่ใบกำกับภาษีท้ายบิล มักขึ้นต้นด้วย 1 และยาว 17-20 หลัก ไม่ใช่เลข TID/TRACE/APPR",
-  "coupon": "เฉพาะ บางจาก/KJ OIL: เลขที่คูปอง จากช่อง เลขที่ ในบิลสีเขียว",
-  "total": ยอดเงินตัวเลข,
-  "mile_after": "เฉพาะ PTT: ไมล์หลังเติม อ่านจากบิลช่อง เลขระยะทาง(KM) หรือ 000xxxxx ถ้าไม่มีในบิลให้อ่านจากรูปหน้าปัดที่มีเลขมากกว่า",
-  "image_problem": true ถ้ารูปไม่ชัดอ่านไม่ได้,
-  "note": "หมายเหตุ"
-}]
-
-กฎสำคัญ:
-- PTT: ต้องการ วันที่ + invoice (เลขยาวท้ายบิล ขึ้นต้น 1) + ทะเบียน + ยอด + ไมล์หลังเติม
-- บางจาก/KJ OIL (บิลสีเขียว ชื่อ เค เจ ออยล์): ต้องการ วันที่ + คูปอง(เลขที่ในบิล) + ทะเบียน + ยอด เท่านั้น ไม่ต้องมีไมล์และ invoice
-- ถ้ารถคันไหนไม่มีบิลหรือมีแค่รูปหน้าปัดรูปเดียว = filled: false
-- ถ้ามีรูปหน้าปัด 2 รูปของรถคันเดียวกัน รูปที่มีเลขไมล์มากกว่า = หลังเติม ไม่ต้องนับเป็น 2 รายการ
-- ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน ให้รวมเป็น 1 รายการ` });
-
   try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 3000, messages: [{ role: 'user', content }] })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
-    if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0,200));
-    const txt = data.content.map(i => i.text||'').join('').replace(/```json|```/g,'').trim();
-    parsed = JSON.parse(txt);
-    parsed = parsed.map(d => ({ ...d, car: matchFleet(d.car) }));
+    for (let i = 0; i < batches.length; i++) {
+      const pct = Math.round((i / batches.length) * 100);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('loading-text').textContent =
+        `กำลังประมวลผล batch ${i+1}/${batches.length} (รูปที่ ${i*BATCH_SIZE+1}-${Math.min((i+1)*BATCH_SIZE, imgData.length)})...`;
+      const result = await callAPI(batches[i]);
+      parsed = mergeParsed(parsed, result);
+    }
+    document.getElementById('progress-fill').style.width = '100%';
     renderResults(parsed);
   } catch(e) {
     document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: ' + e.message + '</div>';
   }
+
   document.getElementById('loading').style.display = 'none';
   btn.disabled = false;
 }
@@ -254,7 +317,7 @@ function renderResults(data) {
   if (nofill.length) {
     html += `<div class="section-label">ไม่เติมน้ำมัน</div>
     <div class="no-fill-box">
-      <div style="font-size:13px;color:#888;margin-bottom:4px;">รถที่ไม่เติมวันนี้ (${nofill.length} คัน)</div>
+      <div style="font-size:13px;color:#888;">รถที่ไม่เติมวันนี้ (${nofill.length} คัน)</div>
       <div class="no-fill-grid">`;
     for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}</div>`;
     html += '</div></div>';
@@ -295,6 +358,7 @@ function resetAll() {
   document.getElementById('btn-row').style.display='none';
   document.getElementById('export-row').style.display='none';
   document.getElementById('loading').style.display='none';
+  document.getElementById('progress-fill').style.width='0%';
 }
 </script>
 </body>
