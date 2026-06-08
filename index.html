@@ -21,7 +21,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .preview-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 0.5px solid #e0e0e0; }
 .btn-row { display: none; gap: 8px; margin-bottom: 1rem; }
-.btn { padding: 10px 20px; border-radius: 8px; border: 0.5px solid #ccc; background: #fff; font-size: 14px; cursor: pointer; font-weight: 500; transition: background 0.15s; }
+.btn { padding: 10px 20px; border-radius: 8px; border: 0.5px solid #ccc; background: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
 .btn:hover { background: #f5f5f5; }
 .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; flex: 1; }
 .btn-primary:hover { background: #333; }
@@ -31,7 +31,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
 .card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
-.card-warn { background: #fff; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .car-name { font-size: 16px; font-weight: 600; }
 .tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
@@ -44,12 +44,13 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
 .field { background: #f8f8f8; border-radius: 8px; padding: 6px 10px; }
 .field-label { font-size: 10px; color: #888; margin-bottom: 2px; }
-.field-val { font-size: 12px; font-weight: 500; }
-.no-fill-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.field-val { font-size: 12px; font-weight: 500; word-break: break-all; }
+.no-fill-box { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.no-fill-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
 .export-row { display: none; gap: 8px; margin-top: 1rem; }
 .note { font-size: 12px; color: #888; margin-top: 8px; }
-.warn-note { font-size: 12px; color: #92400e; margin-top: 8px; font-weight: 500; }
+.warn-note { font-size: 12px; color: #92400e; margin-top: 4px; font-weight: 500; }
 .error { color: #dc2626; font-size: 13px; padding: 1rem; background: #fef2f2; border-radius: 8px; word-break: break-all; }
 @media (max-width: 400px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -156,34 +157,31 @@ async function analyze() {
 
   const fleetList = Object.entries(FLEET).map(([k,v]) => k+'='+v).join(', ');
 
-  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท
+  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทั้งหมดแล้วจัดกลุ่มตามทะเบียนรถ
 
 ทะเบียนรถ (เลขย่อ=ทะเบียนเต็ม): ${fleetList}
-ถ้าเห็นเลขย่อให้แปลงเป็นทะเบียนเต็มเสมอ
+เมื่อเห็นเลขย่อในรูปให้แปลงเป็นทะเบียนเต็มเสมอ ทะเบียนรถในป้ายหน้าปัดมักเขียนย่อ เช่น 3288 = 3ฒธ 3288
 
-อ่านรูปทั้งหมดแล้วจัดกลุ่มตามทะเบียนรถ โดย 1 คัน = 1 รายการเท่านั้น ห้ามซ้ำ
-ถ้ามีรูปหน้าปัดหลายรูปของคันเดียวกัน ให้ใช้รูปที่เลขไมล์มากกว่าเป็นไมล์หลังเติม
-
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น:
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่นนอกจาก JSON:
 [{
   "car": "ทะเบียนเต็ม",
   "filled": true หรือ false,
   "pump": "PTT หรือ บางจาก หรือ KJ OIL หรือ Caltex",
-  "date": "วันที่ dd/mm/yy จากบิล",
-  "invoice": "PTT เท่านั้น: เลขยาวที่บรรทัดสุดท้ายของบิล ขึ้นต้นด้วย 1 เช่น 12695548160506008 3 ต้องครบทุกหลัก",
-  "coupon": "บางจาก/KJ OIL เท่านั้น: เลขคูปอง",
+  "date": "dd/mm/yy จากบิล",
+  "invoice": "เฉพาะ PTT: เลขที่ใบกำกับภาษีท้ายบิล มักขึ้นต้นด้วย 1 และยาว 17-20 หลัก ไม่ใช่เลข TID/TRACE/APPR",
+  "coupon": "เฉพาะ บางจาก/KJ OIL: เลขที่คูปอง จากช่อง เลขที่ ในบิลสีเขียว",
   "total": ยอดเงินตัวเลข,
-  "mile_after": "PTT เท่านั้น: ไมล์หลังเติม อ่านจากบิลช่อง ลูกระยะทาง KM หรือเลขหลัง 00 เช่น 00051714 = 51714",
-  "image_problem": true ถ้าอ่านข้อมูลสำคัญไม่ได้,
+  "mile_after": "เฉพาะ PTT: ไมล์หลังเติม อ่านจากบิลช่อง เลขระยะทาง(KM) หรือ 000xxxxx ถ้าไม่มีในบิลให้อ่านจากรูปหน้าปัดที่มีเลขมากกว่า",
+  "image_problem": true ถ้ารูปไม่ชัดอ่านไม่ได้,
   "note": "หมายเหตุ"
 }]
 
 กฎสำคัญ:
-- PTT ต้องการ: date, invoice (เลขยาวครบ), car, total, mile_after
-- บางจาก/KJ OIL ต้องการ: date, coupon, car, total (ไม่ต้องมี invoice และ mile)
-- ถ้าไม่มีบิล filled=false ไม่ต้องมี date/total/mile
-- 1 ทะเบียน = 1 record เท่านั้น ห้ามซ้ำ
-- image_problem=true เฉพาะตอนอ่านข้อมูลสำคัญไม่ได้จริงๆ` });
+- PTT: ต้องการ วันที่ + invoice (เลขยาวท้ายบิล ขึ้นต้น 1) + ทะเบียน + ยอด + ไมล์หลังเติม
+- บางจาก/KJ OIL (บิลสีเขียว ชื่อ เค เจ ออยล์): ต้องการ วันที่ + คูปอง(เลขที่ในบิล) + ทะเบียน + ยอด เท่านั้น ไม่ต้องมีไมล์และ invoice
+- ถ้ารถคันไหนไม่มีบิลหรือมีแค่รูปหน้าปัดรูปเดียว = filled: false
+- ถ้ามีรูปหน้าปัด 2 รูปของรถคันเดียวกัน รูปที่มีเลขไมล์มากกว่า = หลังเติม ไม่ต้องนับเป็น 2 รายการ
+- ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน ให้รวมเป็น 1 รายการ` });
 
   try {
     const res = await fetch('/api/analyze', {
@@ -217,7 +215,7 @@ function renderResults(data) {
   let html = '';
 
   if (warn.length) {
-    html += '<div class="section-label">⚠️ รูปมีปัญหา — ตรวจสอบและคีย์เอง</div>';
+    html += '<div class="section-label">⚠️ รูปมีปัญหา — กรุณาคีย์เอง</div>';
     for (let d of warn) {
       html += `<div class="card-warn">
         <div class="card-header">
@@ -254,9 +252,12 @@ function renderResults(data) {
   }
 
   if (nofill.length) {
-    html += '<div class="section-label">ไม่เติมน้ำมัน</div><div class="no-fill-grid">';
+    html += `<div class="section-label">ไม่เติมน้ำมัน</div>
+    <div class="no-fill-box">
+      <div style="font-size:13px;color:#888;margin-bottom:4px;">รถที่ไม่เติมวันนี้ (${nofill.length} คัน)</div>
+      <div class="no-fill-grid">`;
     for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}</div>`;
-    html += '</div>';
+    html += '</div></div>';
   }
 
   document.getElementById('results').innerHTML = html;
