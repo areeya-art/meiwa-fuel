@@ -31,17 +31,20 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #1a1a1a; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
 .card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.card-warn { border-color: #f59e0b; background: #fffbeb; }
 .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .car-name { font-size: 16px; font-weight: 600; }
 .tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
 .tag-ptt { background: #e8f0fe; color: #1a56db; }
 .tag-bj { background: #e8f5e9; color: #1e7e34; }
 .tag-cx { background: #fff8e1; color: #b45309; }
+.tag-warn { background: #fef3c7; color: #92400e; }
 .amount { margin-left: auto; font-size: 15px; font-weight: 600; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
 .field { background: #f8f8f8; border-radius: 8px; padding: 6px 10px; }
 .field-label { font-size: 10px; color: #888; margin-bottom: 2px; }
 .field-val { font-size: 12px; font-weight: 500; }
+.field-warn { background: #fef3c7; }
 .no-fill-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
 .export-row { display: none; gap: 8px; margin-top: 1rem; }
@@ -80,10 +83,40 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #1a1a1a; }
   <div id="results"></div>
   <div class="export-row" id="export-row">
     <button class="btn" style="flex:1" onclick="exportCSV('ptt')">⬇️ Export PTT (.csv)</button>
-    <button class="btn" style="flex:1" onclick="exportCSV('bj')">⬇️ Export บางจาก (.csv)</button>
+    <button class="btn" style="flex:1" onclick="exportCSV('bj')">⬇️ Export บางจาก/KJ (.csv)</button>
   </div>
 </div>
 <script>
+const FLEET = {
+  "7858":"3ฒร 7858","7852":"3ฒร 7852","7862":"3ฒร 7862","7845":"3ฒร 7845",
+  "3986":"3ฒศ 3986","4531":"3ฒล 4531","4532":"3ฒล 4532","4534":"3ฒล 4534",
+  "7865":"3ฒร 7865","650":"3ฒบ 650","9917":"3ฒบ 9917","4081":"4ฒข 4081",
+  "4083":"4ฒข 4083","4080":"4ฒข 4080","6851":"4ฒง 6851","6861":"4ฒง 6861",
+  "6862":"4ฒง 6862","651":"3ฒบ 651","3850":"4ฒฌ 3850","4120":"2ฒบ 4120",
+  "4533":"3ฒล 4533","4668":"2ฒผ 4668","5593":"4ฒจ 5593","6277":"3ฒส 6277",
+  "6926":"4ฒง 6926","7380":"3ฒผ 7380","7847":"3ฒร 7847","7851":"3ฒร 7851",
+  "7855":"3ฒร 7855","7924":"2ฒต 7924","9913":"3ฒบ 9913","1606":"2ฒม 1606",
+  "7274":"บท 7274","709":"3ฒน 709","711":"3ฒน 711","1570":"3กณ 1570",
+  "2120":"3ฒน 2120","3288":"3ฒธ 3288","4423":"ฆผ 4423","4535":"3ฒล 4535",
+  "4609":"9กว 4609","4625":"3ฒท 4625","5606":"3ฒญ 5606","5801":"กฉ 5801",
+  "6177":"3ฒช 6177","6381":"3ฒพ 6381","6625":"กฉ 6625","6876":"3ฒท 6876",
+  "7496":"บท 7496","8708":"6กฮ 8708","2ขศ1207":"2ขศ 1207","2ขฮ1337":"2ขฮ 1337",
+  "3ขพ1325":"3ขพ 1325","4กฐ1988":"4กฐ 1988","8กฆ1337":"8กฆ 1337",
+  "FORKLIFT":"โฟล์คลิฟท์","SERCOOLER":"เซอร์คูลเลอร์"
+};
+
+function matchCar(raw) {
+  if (!raw) return { car: null, warn: true };
+  const r = raw.replace(/\s/g,'').toUpperCase();
+  for (const [k, v] of Object.entries(FLEET)) {
+    const vn = v.replace(/\s/g,'').toUpperCase();
+    if (r === vn || r.includes(k.toUpperCase()) || vn.includes(r)) {
+      return { car: v, warn: false };
+    }
+  }
+  return { car: raw, warn: true };
+}
+
 let files = [], imgData = [], parsed = [];
 
 function onDrop(e) {
@@ -122,16 +155,44 @@ async function analyze() {
   for (let img of imgData) {
     content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.b64 } });
   }
-  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท อ่านรูปทั้งหมดแล้วจัดกลุ่มเป็นชุดตามทะเบียนรถ
-ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น แต่ละชุดมีรูปแบบ:
-[{"car":"ทะเบียนรถ","filled":true,"pump":"PTT หรือ บางจาก หรือ Caltex","date":"dd/mm/yy","invoice":"เลข invoice","total":ตัวเลข,"mile_before":ตัวเลข,"mile_after":ตัวเลข,"branch":"สาขา PTT เช่น PTT/RY/CHON","coupon":"เลขคูปองบางจาก","note":"หมายเหตุ"}]
-กฎ: ถ้าไม่มีบิล filled=false และ total/mile เป็น null, PTT อ่านไมล์จากบิล (ลูกระยะทาง KM), บางจาก/Caltex อ่านไมล์จากหน้าปัดที่มีเลขมากกว่า` });
+
+  const fleetList = Object.values(FLEET).join(', ');
+
+  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa
+
+รายการทะเบียนรถที่ถูกต้องของบริษัท: ${fleetList}
+
+อ่านรูปทั้งหมดแล้วจัดกลุ่มเป็นชุดตามทะเบียนรถ
+ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่นนอกจาก JSON
+
+รูปแบบ JSON:
+[{
+  "car": "ทะเบียนรถ (ให้ match กับรายการทะเบียนที่ให้ไว้ ถ้า match ไม่ได้ให้ใส่ null)",
+  "image_problem": false,
+  "filled": true,
+  "pump": "PTT หรือ บางจาก หรือ KJ Oil หรือ Caltex",
+  "date": "dd/mm/yy",
+  "invoice": "เลขที่เริ่มด้วย 1 ที่อยู่ท้ายบิล PTT เท่านั้น KJ Oil ไม่มี invoice",
+  "total": 1900,
+  "mile_before": 133267,
+  "mile_after": 133267,
+  "branch": "ชื่อสาขาปั๊ม PTT เท่านั้น",
+  "coupon": "เลขคูปองบางจาก/KJ Oil เท่านั้น",
+  "note": ""
+}]
+
+กฎสำคัญ:
+- ถ้ารูปไม่ชัด อ่านไม่ออก ให้ใส่ image_problem: true และ note บอกว่าส่วนไหนมีปัญหา
+- ถ้าไม่มีบิล ให้ filled: false และ total/mile/invoice เป็น null
+- PTT: อ่านไมล์จากบิล (เลขระยะทาง KM) และ invoice คือเลขยาวท้ายบิลที่ขึ้นต้นด้วย 1
+- KJ Oil/บางจาก: อ่านไมล์จากหน้าปัดรูปที่มีเลขมากกว่า ไม่มี invoice
+- car ให้ match กับรายการทะเบียนที่ให้ไว้ให้ตรงที่สุด` });
 
   try {
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 2000, messages: [{ role: 'user', content }] })
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 3000, messages: [{ role: 'user', content }] })
     });
 
     const data = await res.json();
@@ -139,15 +200,25 @@ async function analyze() {
     if (!res.ok) {
       throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
     }
-
     if (!data.content) {
       throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0, 200));
     }
 
     const txt = data.content.map(i => i.text || '').join('').replace(/```json|```/g, '').trim();
     parsed = JSON.parse(txt);
-    renderResults(parsed);
 
+    parsed = parsed.map(d => {
+      if (d.car) {
+        const m = matchCar(d.car);
+        d.car = m.car;
+        d.car_warn = m.warn;
+      } else {
+        d.car_warn = true;
+      }
+      return d;
+    });
+
+    renderResults(parsed);
   } catch(e) {
     document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: ' + e.message + '</div>';
   }
@@ -169,22 +240,25 @@ function renderResults(data) {
     html += '<div class="section-label">รายการเติมน้ำมัน</div>';
     for (let d of filled) {
       const pump = d.pump || '';
-      const tagCls = pump.includes('PTT') ? 'tag-ptt' : pump.includes('บางจาก') ? 'tag-bj' : 'tag-cx';
-      html += `<div class="card">
+      const tagCls = pump.includes('PTT') ? 'tag-ptt' : pump.includes('Caltex') ? 'tag-cx' : 'tag-bj';
+      const hasWarn = d.image_problem || d.car_warn;
+      html += `<div class="card ${hasWarn ? 'card-warn' : ''}">
         <div class="card-header">
-          <span class="car-name">${d.car||'-'}</span>
+          <span class="car-name">${d.car || '❓ ไม่ระบุ'}</span>
           <span class="tag ${tagCls}">${pump}</span>
+          ${d.car_warn ? '<span class="tag tag-warn">⚠️ ตรวจทะเบียน</span>' : ''}
+          ${d.image_problem ? '<span class="tag tag-warn">⚠️ รูปมีปัญหา</span>' : ''}
           <span class="amount">฿${(d.total||0).toLocaleString()}</span>
         </div>
         <div class="fields">
           <div class="field"><div class="field-label">วันที่</div><div class="field-val">${d.date||'-'}</div></div>
           <div class="field"><div class="field-label">ไมล์ก่อน</div><div class="field-val">${d.mile_before||'-'}</div></div>
-          <div class="field"><div class="field-label">ไมล์หลัง</div><div class="field-val">${d.mile_after||'-'}</div></div>
+          <div class="field ${!d.mile_after ? 'field-warn' : ''}"><div class="field-label">ไมล์หลัง</div><div class="field-val">${d.mile_after||'⚠️ ไม่ชัด'}</div></div>
+          ${pump.includes('PTT') || pump.includes('Caltex') ? `<div class="field ${!d.invoice ? 'field-warn' : ''}"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px">${d.invoice||'⚠️ ไม่ชัด'}</div></div>` : ''}
           ${pump.includes('PTT') ? `<div class="field"><div class="field-label">Branch</div><div class="field-val">${d.branch||'-'}</div></div>` : ''}
-          ${pump.includes('บางจาก') ? `<div class="field"><div class="field-label">คูปอง</div><div class="field-val">${d.coupon||'-'}</div></div>` : ''}
-          <div class="field"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px">${(d.invoice||'-').substring(0,20)}</div></div>
+          ${!pump.includes('PTT') && !pump.includes('Caltex') ? `<div class="field ${!d.coupon ? 'field-warn' : ''}"><div class="field-label">คูปอง</div><div class="field-val">${d.coupon||'⚠️ ไม่ชัด'}</div></div>` : ''}
         </div>
-        ${d.note ? `<div class="note">${d.note}</div>` : ''}
+        ${d.note ? `<div class="note">⚠️ ${d.note}</div>` : ''}
       </div>`;
     }
   }
@@ -201,11 +275,11 @@ function exportCSV(type) {
   const filled = parsed.filter(d => d.filled);
   let rows, header;
   if (type === 'ptt') {
-    const list = filled.filter(d => !(d.pump||'').includes('บางจาก'));
+    const list = filled.filter(d => (d.pump||'').includes('PTT') || (d.pump||'').includes('Caltex'));
     header = 'DATE,INVOICE NO.,CAR,TOTAL,MILE,BRANCH';
     rows = list.map(d => `${d.date||''},${d.invoice||''},${d.car||''},${d.total||''},${d.mile_after||''},${d.branch||''}`);
   } else {
-    const list = filled.filter(d => (d.pump||'').includes('บางจาก'));
+    const list = filled.filter(d => !(d.pump||'').includes('PTT') && !(d.pump||'').includes('Caltex'));
     header = 'DATE,COUPON,CAR,TOTAL,MILE';
     rows = list.map(d => `${d.date||''},${d.coupon||''},${d.car||''},${d.total||''},${d.mile_after||''}`);
   }
@@ -213,7 +287,7 @@ function exportCSV(type) {
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = type === 'ptt' ? 'fuel_ptt.csv' : 'fuel_bangchak.csv';
+  a.download = type === 'ptt' ? 'fuel_ptt.csv' : 'fuel_bangchak_kj.csv';
   a.click();
 }
 
