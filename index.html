@@ -8,7 +8,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; }
 .container { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem; }
-h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #1a1a1a; }
+h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.5rem; }
 .stat { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 10px; padding: 12px; text-align: center; }
 .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
@@ -154,32 +154,36 @@ async function analyze() {
     content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.b64 } });
   }
 
-  const fleetList = Object.entries(FLEET).map(([k,v]) => k + '=' + v).join(', ');
+  const fleetList = Object.entries(FLEET).map(([k,v]) => k+'='+v).join(', ');
 
-  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท อ่านรูปทั้งหมดแล้วจัดกลุ่มเป็นชุดตามทะเบียนรถ
+  content.push({ type: 'text', text: `คุณคือระบบบัญชีน้ำมันรถบริษัท
 
-ทะเบียนรถในระบบ (เลขย่อ=ทะเบียนเต็ม): ${fleetList}
+ทะเบียนรถ (เลขย่อ=ทะเบียนเต็ม): ${fleetList}
 ถ้าเห็นเลขย่อให้แปลงเป็นทะเบียนเต็มเสมอ
+
+อ่านรูปทั้งหมดแล้วจัดกลุ่มตามทะเบียนรถ โดย 1 คัน = 1 รายการเท่านั้น ห้ามซ้ำ
+ถ้ามีรูปหน้าปัดหลายรูปของคันเดียวกัน ให้ใช้รูปที่เลขไมล์มากกว่าเป็นไมล์หลังเติม
 
 ตอบเป็น JSON array เท่านั้น ห้ามมีข้อความอื่น:
 [{
-  "car": "ทะเบียนเต็ม เช่น 3ฒร 7858",
+  "car": "ทะเบียนเต็ม",
   "filled": true หรือ false,
   "pump": "PTT หรือ บางจาก หรือ KJ OIL หรือ Caltex",
-  "date": "วันที่ dd/mm/yy",
-  "invoice": "สำหรับ PTT เท่านั้น คือเลขยาวที่ขึ้นต้นด้วย 1 ท้ายบิล เช่น 12675139260209016",
-  "coupon": "สำหรับ บางจาก/KJ OIL เท่านั้น คือเลขคูปอง",
+  "date": "วันที่ dd/mm/yy จากบิล",
+  "invoice": "PTT เท่านั้น: เลขยาวที่บรรทัดสุดท้ายของบิล ขึ้นต้นด้วย 1 เช่น 12695548160506008 3 ต้องครบทุกหลัก",
+  "coupon": "บางจาก/KJ OIL เท่านั้น: เลขคูปอง",
   "total": ยอดเงินตัวเลข,
-  "mile_after": ไมล์หลังเติมตัวเลข สำหรับ PTT เท่านั้น อ่านจากบิล ช่อง ลูกระยะทาง KM,
-  "image_problem": true ถ้ารูปไม่ชัดหรืออ่านข้อมูลสำคัญไม่ได้,
+  "mile_after": "PTT เท่านั้น: ไมล์หลังเติม อ่านจากบิลช่อง ลูกระยะทาง KM หรือเลขหลัง 00 เช่น 00051714 = 51714",
+  "image_problem": true ถ้าอ่านข้อมูลสำคัญไม่ได้,
   "note": "หมายเหตุ"
 }]
 
 กฎสำคัญ:
-- PTT ต้องการ: วันที่, invoice (เลขยาวท้ายบิลขึ้นต้น 1), ทะเบียน, ยอด, ไมล์หลังเติม
-- บางจาก/KJ OIL ต้องการ: วันที่, คูปอง, ทะเบียน, ยอด (ไม่ต้องมีไมล์และ invoice)
-- ถ้าไม่มีบิล filled=false
-- ถ้ารูปไม่ชัดหรืออ่านไม่ได้ให้ image_problem=true` });
+- PTT ต้องการ: date, invoice (เลขยาวครบ), car, total, mile_after
+- บางจาก/KJ OIL ต้องการ: date, coupon, car, total (ไม่ต้องมี invoice และ mile)
+- ถ้าไม่มีบิล filled=false ไม่ต้องมี date/total/mile
+- 1 ทะเบียน = 1 record เท่านั้น ห้ามซ้ำ
+- image_problem=true เฉพาะตอนอ่านข้อมูลสำคัญไม่ได้จริงๆ` });
 
   try {
     const res = await fetch('/api/analyze', {
@@ -190,7 +194,7 @@ async function analyze() {
     const data = await res.json();
     if (!res.ok) throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
     if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0,200));
-    const txt = data.content.map(i => i.text || '').join('').replace(/```json|```/g,'').trim();
+    const txt = data.content.map(i => i.text||'').join('').replace(/```json|```/g,'').trim();
     parsed = JSON.parse(txt);
     parsed = parsed.map(d => ({ ...d, car: matchFleet(d.car) }));
     renderResults(parsed);
@@ -202,18 +206,18 @@ async function analyze() {
 }
 
 function renderResults(data) {
-  const filled = data.filter(d => d.filled);
+  const filled = data.filter(d => d.filled && !d.image_problem);
   const nofill = data.filter(d => !d.filled);
   const warn = data.filter(d => d.image_problem);
-  const total = filled.reduce((s,d) => s + (d.total||0), 0);
+  const total = filled.reduce((s,d) => s+(d.total||0), 0);
   document.getElementById('cnt-fill').textContent = filled.length;
   document.getElementById('cnt-no').textContent = nofill.length;
-  document.getElementById('cnt-total').textContent = '฿' + total.toLocaleString();
+  document.getElementById('cnt-total').textContent = '฿'+total.toLocaleString();
 
   let html = '';
 
   if (warn.length) {
-    html += '<div class="section-label">⚠️ รูปมีปัญหา — กรุณาตรวจสอบและคีย์เอง</div>';
+    html += '<div class="section-label">⚠️ รูปมีปัญหา — ตรวจสอบและคีย์เอง</div>';
     for (let d of warn) {
       html += `<div class="card-warn">
         <div class="card-header">
@@ -225,10 +229,10 @@ function renderResults(data) {
     }
   }
 
-  if (filled.filter(d => !d.image_problem).length) {
+  if (filled.length) {
     html += '<div class="section-label">รายการเติมน้ำมัน</div>';
-    for (let d of filled.filter(d => !d.image_problem)) {
-      const pump = d.pump || '';
+    for (let d of filled) {
+      const pump = d.pump||'';
       const tagCls = pump.includes('PTT') ? 'tag-ptt' : pump.includes('KJ') ? 'tag-kj' : pump.includes('บางจาก') ? 'tag-bj' : 'tag-cx';
       const isPTT = pump.includes('PTT') || pump.includes('Caltex');
       const isBJ = pump.includes('บางจาก') || pump.includes('KJ');
@@ -256,7 +260,7 @@ function renderResults(data) {
   }
 
   document.getElementById('results').innerHTML = html;
-  if (filled.filter(d=>!d.image_problem).length) document.getElementById('export-row').style.display = 'flex';
+  if (filled.length) document.getElementById('export-row').style.display = 'flex';
 }
 
 function exportCSV(type) {
