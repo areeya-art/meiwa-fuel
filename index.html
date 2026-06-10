@@ -9,65 +9,49 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; }
 .container { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem; }
 h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
-
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1.5rem; }
 .stat { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 10px; padding: 12px; text-align: center; }
 .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
 .stat-val { font-size: 20px; font-weight: 600; }
-
 .upload-zone { border: 1.5px dashed #ccc; border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; background: #fff; transition: background 0.15s; margin-bottom: 1rem; }
 .upload-zone:hover { background: #f9f9f9; }
 .upload-icon { font-size: 32px; margin-bottom: 8px; }
 .upload-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
 .upload-sub { font-size: 13px; color: #888; }
-
 .preview-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 0.5px solid #e0e0e0; }
-
 .btn-row { display: none; gap: 8px; margin-bottom: 1rem; }
 .btn { padding: 10px 20px; border-radius: 8px; border: 0.5px solid #ccc; background: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
 .btn:hover { background: #f5f5f5; }
 .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; flex: 1; }
 .btn-primary:hover { background: #333; }
 .btn-primary:disabled { background: #999; border-color: #999; cursor: not-allowed; }
-
 .loading { display: none; text-align: center; padding: 2rem; color: #888; font-size: 14px; }
 .spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #1a1a1a; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .progress-bar { width: 100%; background: #e0e0e0; border-radius: 8px; height: 6px; margin-top: 8px; }
 .progress-fill { height: 6px; background: #1a1a1a; border-radius: 8px; transition: width 0.3s; }
-
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
-
-.card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 10px; }
-.card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 10px; }
-
+.card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.car-name { font-size: 16px; font-weight: 700; }
-
-.tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
-.tag-ptt  { background: #e8f0fe; color: #1a56db; }
-.tag-kj   { background: #fce7f3; color: #9d174d; }
+.car-name { font-size: 16px; font-weight: 600; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+.tag-ptt { background: #e8f0fe; color: #1a56db; }
+.tag-kj { background: #fce7f3; color: #9d174d; }
 .tag-warn { background: #fef3c7; color: #92400e; }
-
-.amount { margin-left: auto; font-size: 16px; font-weight: 700; color: #1a1a1a; }
-
-.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; }
-.field { background: #f7f7f7; border-radius: 8px; padding: 8px 10px; }
-.field-label { font-size: 10px; color: #999; margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-.field-val { font-size: 13px; font-weight: 600; word-break: break-all; color: #1a1a1a; }
-.field-val.long { font-size: 11px; }
-.field-missing .field-val { color: #dc2626; }
-
+.amount { margin-left: auto; font-size: 15px; font-weight: 600; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+.field { background: #f8f8f8; border-radius: 8px; padding: 6px 10px; }
+.field-label { font-size: 10px; color: #888; margin-bottom: 2px; }
+.field-val { font-size: 12px; font-weight: 500; word-break: break-all; }
 .no-fill-box { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .no-fill-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
-
 .export-row { display: none; gap: 8px; margin-top: 1rem; }
-.note { font-size: 12px; color: #888; margin-top: 6px; }
+.note { font-size: 12px; color: #888; margin-top: 8px; }
 .warn-note { font-size: 12px; color: #92400e; margin-top: 4px; font-weight: 500; }
 .error { color: #dc2626; font-size: 13px; padding: 1rem; background: #fef2f2; border-radius: 8px; word-break: break-all; }
-
 @media (max-width: 400px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .stat-val { font-size: 18px; }
@@ -92,7 +76,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
     ondrop="onDrop(event)">
     <div class="upload-icon">📷</div>
     <div class="upload-title">อัปโหลดรูปทั้งหมดได้เลย</div>
-    <div class="upload-sub">รูปบิล + ไมล์ก่อน + ไมล์หลัง ทุกคัน ไม่ต้องแยก (รองรับสูงสุด 60 รูป)</div>
+    <div class="upload-sub">รูปบิล + รูปหน้าปัดไมล์ ทุกคัน ไม่ต้องแยก (รองรับสูงสุด 60 รูป)</div>
   </div>
   <input type="file" id="file-in" accept="image/*" multiple style="display:none" onchange="onFiles(this.files)">
 
@@ -118,6 +102,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 </div>
 
 <script>
+// ========== FLEET REGISTRY ==========
 const FLEET = {
   "7858":"3ฒร 7858","7852":"3ฒร 7852","7862":"3ฒร 7862","7845":"3ฒร 7845",
   "3986":"3ฒศ 3986","4531":"3ฒล 4531","4532":"3ฒล 4532","4534":"3ฒล 4534",
@@ -140,10 +125,18 @@ const BATCH_SIZE = 15;
 const MAX_IMG_SIZE = 1280;
 const QUALITY = 0.85;
 
+// matchFleet: exact match ก่อน แล้ว longer-key-first includes
+// แก้ปัญหา 651 โดน match เป็น 650 เพราะ includes จับ "65" ของ "650" ก่อน
 function matchFleet(raw) {
   if (!raw) return raw;
   const clean = raw.replace(/\s/g,'').toUpperCase();
+  // 1) exact
   for (const [key, val] of Object.entries(FLEET)) {
+    if (clean === key.replace(/\s/g,'').toUpperCase()) return val;
+  }
+  // 2) includes — longer keys first เพื่อป้องกัน partial collision
+  const sorted = Object.entries(FLEET).sort((a,b) => b[0].length - a[0].length);
+  for (const [key, val] of sorted) {
     if (clean.includes(key.replace(/\s/g,'').toUpperCase())) return val;
   }
   return raw;
@@ -194,60 +187,59 @@ function onFiles(fl) {
   document.getElementById('btn-row').style.display = 'flex';
 }
 
-const PROMPT = (fleetList) => `คุณคือระบบอ่านบิลน้ำมันบริษัท Meiwa Enterprise (ประเทศไทย)
-อ่านรูปทุกรูปอย่างละเอียด จัดกลุ่มตามทะเบียนรถ แล้วตอบเป็น JSON array เท่านั้น
+// ========== PROMPT ==========
+const PROMPT = (fleetList) => `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทุกรูปในชุดนี้ แล้วสรุปเป็น JSON array
 
-ทะเบียนรถ (เลขย่อ → ทะเบียนเต็ม): ${fleetList}
-เมื่อเห็นเลขท้ายทะเบียนในรูป ให้แปลงเป็นทะเบียนเต็มเสมอ
+ทะเบียนรถที่รู้จัก (เลขย่อ → ทะเบียนเต็ม):
+${fleetList}
 
-=== FORMAT ===
-ตอบด้วย JSON array เท่านั้น ห้ามมีข้อความก่อนหรือหลัง JSON เริ่มด้วย [ จบด้วย ]
+เมื่อเห็นเลขย่อในรูปให้แปลงเป็นทะเบียนเต็มเสมอ
 
+===== กฎการอ่านบิลแต่ละประเภท =====
+
+[PTT]
+- บิลพิมพ์ มีโลโก้ PTT
+- ดึง: วันที่ (date), เลขที่ใบกำกับภาษี (invoice — เลข 17-20 หลัก ขึ้นต้นด้วย 1 อยู่ท้ายบิล ไม่ใช่ TID/TRACE/APPR), ทะเบียน (car), ยอดเงิน (total), ไมล์หลังเติม (mile_after — จากช่อง "เลขระยะทาง(KM)" หรือเลขที่มากกว่าในหน้าปัด)
+- pump = "PTT"
+
+[KJ OIL]
+- บิลเขียนมือสีเขียว หัวบิล "บริษัท เค เจ ออยล์ จำกัด"
+- coupon = เลขที่พิมพ์ไว้มุมบนขวาของบิลสีเขียว หลังคำว่า "เลขที่" ตัวเลขอย่างเดียว ไม่มีตัวอักษร ตัวอย่าง: 45635 / 12800 / 9001
+  *** อ่านให้ละเอียด เลขนี้มักพิมพ์เป็นตัวเลขขนาดใหญ่ชัดเจน ***
+- car = อ่านจากช่อง "ทะเบียนรถ" บนบิลสีเขียว (มักเขียนมือ)
+- date = วันที่บนบิล (มักเขียนมือในช่อง "วันที่")
+- total = รวมยอด (บรรทัดสุดท้าย)
+- ไม่ต้องมี invoice และ mile_after
+- pump = "KJ OIL"
+
+===== กฎ filled / ไม่เติม =====
+- filled = true ถ้ามีบิลที่อ่านได้ครบ (วันที่ + ทะเบียน + ยอด) ไม่ว่าจะมีรูปหน้าปัดหรือไม่
+- filled = false ถ้าไม่มีบิล หรือมีแค่รูปหน้าปัดไมล์โดยไม่มีบิลเลย
+- ถ้ามีรูปหน้าปัด 2 รูปของรถเดียวกัน (เลขน้อย = ก่อนเติม, เลขมาก = หลังเติม) → ใช้เลขมากเป็น mile_after
+- ถ้ารูปหน้าปัดหลังเติมเห็นเกจน้ำมันเต็มขีดหรือเกือบเต็ม → note ว่า "มีรูปหลังเติม ไม่พบบิลในชุดนี้" และ filled = true
+- ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน
+
+===== กฎอื่น =====
+- image_problem = true เฉพาะกรณีรูปเบลอมากจนอ่านเลขไม่ได้เลย
+- ถ้าหา coupon ไม่เจอให้ใส่ "" (ว่าง) ห้ามใส่ "-" หรือ "ไม่พบ"
+- ถ้าหา invoice ไม่เจอให้ใส่ "" (ว่าง)
+
+ตอบด้วย JSON array เท่านั้น ห้ามพิมพ์อะไรก่อนหรือหลัง ห้ามใช้ markdown เริ่มต้นด้วย [ และจบด้วย ] เท่านั้น:
 [{
   "car": "ทะเบียนเต็ม",
-  "filled": true หรือ false,
-  "pump": "PTT" หรือ "KJ OIL",
-  "date": "dd/mm/yy จากบิล",
-  "invoice": "เฉพาะ PTT: เลขที่ใบกำกับภาษีท้ายบิล ขึ้นต้น 1 ยาว 17-20 หลัก ไม่ใช่ TID/TRACE/APPR",
-  "coupon": "เฉพาะ KJ OIL: เลข 5 หลักที่อยู่ข้างคำว่า 'เลขที่' บนบิลสีเขียว (ตัวพิมพ์ขนาดใหญ่ ด้านบนขวาของบิล เช่น 45635)",
-  "total": ยอดเงินตัวเลข,
-  "liters": ปริมาณน้ำมันลิตรตัวเลข,
-  "mile_after": "เฉพาะ PTT: เลขไมล์หลังเติม (KM) จากบิลหรือหน้าปัดที่มีเลขมากกว่า",
-  "image_problem": true ถ้ารูปไม่ชัดอ่านไม่ได้,
-  "note": "หมายเหตุถ้ามี"
-}]
-
-=== กฎการอ่าน ===
-
-1. PTT
-   - ดึง: วันที่, เลขใบกำกับภาษี (ท้ายบิล ขึ้นต้น 1), ทะเบียน, ยอดเงิน, ลิตร, ไมล์หลังเติม
-   - ไมล์หลังเติม = ช่อง "เลขระยะทาง(KM)" บนบิล หรือเลขที่มากกว่าในรูปหน้าปัด 2 รูป
-
-2. KJ OIL (บิลสีเขียว หัวกระดาษ "บริษัท เค เจ ออยล์ จำกัด")
-   - ดึง: วันที่, คูปอง, ทะเบียน, ยอดเงิน, ลิตร  ไม่ต้องมีไมล์
-   - คูปอง = ตัวเลขที่อยู่ถัดจากคำว่า "เลขที่" บนบิลสีเขียว มักเป็นตัวพิมพ์ขนาดใหญ่อยู่ด้านบนขวาของบิล
-     ตัวอย่าง: ถ้าเห็น "เลขที่  45635" ให้ coupon = "45635"
-     *** เลขคูปองเป็นตัวพิมพ์ ไม่ใช่ลายมือ อ่านให้ถูกต้องเสมอ ***
-   - วันที่อาจเป็นลายมือเขียน เช่น "9/3/26" = 09/03/26
-   - ทะเบียนอาจเป็นลายมือเขียน ให้อ่านตัวเลขท้ายแล้วจับคู่กับทะเบียนในฐานข้อมูล
-
-3. ลายมือเขียน — ระวังพิเศษ
-   - ตัวเลขที่ใกล้กัน เช่น 651 กับ 650, 709 กับ 701 — อ่านให้แม่น อย่าสับสน
-   - ถ้าเห็นเลข 3 ตัวชัดเจน ต้องอ่านให้ตรงตามที่เห็น ห้ามเดา
-   - ถ้าเห็น "709" ต้องเป็น 3ฒน 709 ไม่ใช่ 3ฒน 711
-
-4. รูปหน้าปัดน้ำมัน
-   - ถ้ามีบิลอยู่ด้วยในชุดรูปเดียวกัน = filled: true เสมอ
-   - ถ้ามีรูปหน้าปัด 2 รูปจากรถเดียวกัน = รูปเลขไมล์มากกว่า คือ "หลังเติม"
-   - ถ้ามีรูปหน้าปัดเดียวและเกจน้ำมันชี้เต็ม (ขีดสุดหรือใกล้สุด) + มีบิลในชุดนั้น = filled: true
-   - รูปหน้าปัดอย่างเดียว ไม่มีบิล = filled: false
-
-5. ทั่วไป
-   - ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน
-   - ถ้าอ่านข้อมูลบางส่วนไม่ได้ ให้ image_problem: true และอธิบายใน note`;
+  "filled": true,
+  "pump": "PTT หรือ KJ OIL",
+  "date": "dd/mm/yy",
+  "invoice": "เฉพาะ PTT: เลขยาว 17-20 หลัก ขึ้นต้นด้วย 1",
+  "coupon": "เฉพาะ KJ OIL: ตัวเลขจากมุมบนขวาบิลสีเขียว เช่น 45635",
+  "total": 400,
+  "mile_after": "เฉพาะ PTT: เลขไมล์หลังเติม",
+  "image_problem": false,
+  "note": ""
+}]`;
 
 async function callAPI(images) {
-  const fleetList = Object.entries(FLEET).map(([k,v]) => k + '=' + v).join(', ');
+  const fleetList = Object.entries(FLEET).map(([k,v]) => k+' → '+v).join('\n');
   const content = [];
   for (let img of images) {
     const comp = await compressImage(img.b64, img.type);
@@ -264,16 +256,15 @@ async function callAPI(images) {
       messages: [{ role: 'user', content }]
     })
   });
-
   const data = await res.json();
   if (!res.ok) throw new Error('Server error ' + res.status + ': ' + (data.error || JSON.stringify(data)));
-  if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0, 200));
+  if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0,200));
 
-  const txt = data.content.map(i => i.text || '').join('').trim();
+  const txt = data.content.map(i => i.text||'').join('').trim();
   const start = txt.indexOf('[');
-  const end = txt.lastIndexOf(']');
-  if (start === -1 || end === -1) throw new Error('AI ตอบผิดรูปแบบ: ' + txt.substring(0, 150));
-  return JSON.parse(txt.substring(start, end + 1));
+  const end   = txt.lastIndexOf(']');
+  if (start === -1 || end === -1) throw new Error('AI ตอบผิดรูปแบบ: ' + txt.substring(0,150));
+  return JSON.parse(txt.substring(start, end+1));
 }
 
 function mergeParsed(existing, newItems) {
@@ -287,11 +278,7 @@ function mergeParsed(existing, newItems) {
       if (item.filled && !result[idx].filled) {
         result[idx] = { ...item, car };
       } else if (item.filled && result[idx].filled) {
-        const newScore = (item.invoice ? 1 : 0) + (item.coupon ? 1 : 0) + (item.mile_after ? 1 : 0) + (item.liters ? 1 : 0);
-        const oldScore = (result[idx].invoice ? 1 : 0) + (result[idx].coupon ? 1 : 0) + (result[idx].mile_after ? 1 : 0) + (result[idx].liters ? 1 : 0);
-        if (newScore > oldScore || (item.mile_after || 0) > (result[idx].mile_after || 0)) {
-          result[idx] = { ...item, car };
-        }
+        if ((item.mile_after || 0) > (result[idx].mile_after || 0)) result[idx] = { ...item, car };
       }
     }
   }
@@ -308,21 +295,19 @@ async function analyze() {
   parsed = [];
 
   const batches = [];
-  for (let i = 0; i < imgData.length; i += BATCH_SIZE) batches.push(imgData.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < imgData.length; i += BATCH_SIZE) batches.push(imgData.slice(i, i+BATCH_SIZE));
 
   try {
     for (let i = 0; i < batches.length; i++) {
-      const pct = Math.round((i / batches.length) * 100);
-      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-fill').style.width = Math.round((i/batches.length)*100)+'%';
       document.getElementById('loading-text').textContent =
-        `กำลังประมวลผล batch ${i + 1}/${batches.length} (รูปที่ ${i * BATCH_SIZE + 1}–${Math.min((i + 1) * BATCH_SIZE, imgData.length)})...`;
-      const result = await callAPI(batches[i]);
-      parsed = mergeParsed(parsed, result);
+        `กำลังประมวลผล batch ${i+1}/${batches.length} (รูปที่ ${i*BATCH_SIZE+1}–${Math.min((i+1)*BATCH_SIZE,imgData.length)})...`;
+      parsed = mergeParsed(parsed, await callAPI(batches[i]));
     }
     document.getElementById('progress-fill').style.width = '100%';
     renderResults(parsed);
-  } catch (e) {
-    document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: ' + e.message + '</div>';
+  } catch(e) {
+    document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: '+e.message+'</div>';
   }
   document.getElementById('loading').style.display = 'none';
   btn.disabled = false;
@@ -332,11 +317,11 @@ function renderResults(data) {
   const filled = data.filter(d => d.filled && !d.image_problem);
   const nofill = data.filter(d => !d.filled);
   const warn   = data.filter(d => d.image_problem);
-  const total  = filled.reduce((s, d) => s + (d.total || 0), 0);
 
+  const total = filled.reduce((s,d) => s+(d.total||0), 0);
   document.getElementById('cnt-fill').textContent  = filled.length;
   document.getElementById('cnt-no').textContent    = nofill.length;
-  document.getElementById('cnt-total').textContent = '฿' + total.toLocaleString();
+  document.getElementById('cnt-total').textContent = '฿'+total.toLocaleString();
 
   let html = '';
 
@@ -345,65 +330,53 @@ function renderResults(data) {
     for (let d of warn) {
       html += `<div class="card-warn">
         <div class="card-header">
-          <span class="car-name">${d.car || '-'}</span>
+          <span class="car-name">${d.car||'-'}</span>
           <span class="tag tag-warn">⚠️ รูปไม่ชัด</span>
         </div>
-        <div class="warn-note">${d.note || 'กรุณาตรวจสอบและคีย์ข้อมูลเอง'}</div>
+        <div class="warn-note">${d.note||'กรุณาตรวจสอบและคีย์ข้อมูลเอง'}</div>
       </div>`;
     }
   }
 
   if (filled.length) {
-    html += '<div class="section-label">✅ รายการเติมน้ำมัน</div>';
+    html += '<div class="section-label">รายการเติมน้ำมัน</div>';
     for (let d of filled) {
-      const pump   = d.pump || '';
-      const isPTT  = pump.includes('PTT');
-      const isKJ   = pump.includes('KJ');
+      const pump  = d.pump||'';
+      const isPTT = pump.includes('PTT');
+      const isKJ  = pump.includes('KJ');
       const tagCls = isPTT ? 'tag-ptt' : 'tag-kj';
-      const couponMissing = isKJ && (!d.coupon || d.coupon === '-');
+
+      const couponVal  = d.coupon  || '⚠️ ไม่พบ';
+      const invoiceVal = d.invoice || '⚠️ ไม่พบ';
+      const couponStyle  = !d.coupon  ? 'color:#dc2626;font-weight:600' : '';
+      const invoiceStyle = !d.invoice ? 'color:#dc2626;font-weight:600' : '';
 
       html += `<div class="card">
         <div class="card-header">
-          <span class="car-name">${d.car || '-'}</span>
+          <span class="car-name">${d.car||'-'}</span>
           <span class="tag ${tagCls}">${pump}</span>
-          <span class="amount">฿${(d.total || 0).toLocaleString()}</span>
+          <span class="amount">฿${(d.total||0).toLocaleString()}</span>
         </div>
         <div class="fields">
-          <div class="field">
-            <div class="field-label">วันที่</div>
-            <div class="field-val">${d.date || '-'}</div>
-          </div>
-          ${isKJ ? `
-          <div class="field${couponMissing ? ' field-missing' : ''}">
-            <div class="field-label">คูปอง (เลขที่)</div>
-            <div class="field-val">${couponMissing ? '⚠ ไม่พบ' : (d.coupon || '-')}</div>
-          </div>` : ''}
+          <div class="field"><div class="field-label">วันที่</div><div class="field-val">${d.date||'-'}</div></div>
           ${isPTT ? `
-          <div class="field">
-            <div class="field-label">Invoice</div>
-            <div class="field-val long">${d.invoice || '-'}</div>
-          </div>
-          <div class="field">
-            <div class="field-label">ไมล์หลังเติม</div>
-            <div class="field-val">${d.mile_after || '-'}</div>
-          </div>` : ''}
-          ${d.liters ? `
-          <div class="field">
-            <div class="field-label">ลิตร</div>
-            <div class="field-val">${d.liters}</div>
-          </div>` : ''}
+          <div class="field"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px;${invoiceStyle}">${invoiceVal}</div></div>
+          <div class="field"><div class="field-label">ไมล์หลังเติม</div><div class="field-val">${d.mile_after||'-'}</div></div>` : ''}
+          ${isKJ ? `
+          <div class="field"><div class="field-label">เลขที่คูปอง</div><div class="field-val" style="${couponStyle}">${couponVal}</div></div>` : ''}
         </div>
-        ${d.note ? `<div class="note">💬 ${d.note}</div>` : ''}
+        ${d.note ? `<div class="note">${d.note}</div>` : ''}
       </div>`;
     }
   }
 
   if (nofill.length) {
-    html += `<div class="section-label">🚗 ไม่เติมน้ำมัน (${nofill.length} คัน)</div>
-      <div class="no-fill-box">
-        <div class="no-fill-grid">`;
-    for (let d of nofill) html += `<div class="no-fill-tag">${d.car || '-'}</div>`;
-    html += `</div></div>`;
+    html += `<div class="section-label">ไม่เติมน้ำมัน</div>
+    <div class="no-fill-box">
+      <div style="font-size:13px;color:#888;">รถที่ไม่เติมวันนี้ (${nofill.length} คัน)</div>
+      <div class="no-fill-grid">`;
+    for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}</div>`;
+    html += '</div></div>';
   }
 
   document.getElementById('results').innerHTML = html;
@@ -413,41 +386,34 @@ function renderResults(data) {
 function exportCSV(type) {
   const filled = parsed.filter(d => d.filled && !d.image_problem);
   let rows, header;
-
   if (type === 'ptt') {
-    const list = filled.filter(d => (d.pump || '').includes('PTT'));
-    header = 'DATE,INVOICE NO.,CAR,TOTAL,LITERS,MILE';
-    rows = list.map(d =>
-      `${d.date||''},${d.invoice||''},${d.car||''},${d.total||''},${d.liters||''},${d.mile_after||''}`
-    );
+    const list = filled.filter(d => (d.pump||'').includes('PTT'));
+    header = 'DATE,INVOICE NO.,CAR,TOTAL,MILE';
+    rows = list.map(d => `${d.date||''},${d.invoice||''},${d.car||''},${d.total||''},${d.mile_after||''}`);
   } else {
-    const list = filled.filter(d => (d.pump || '').includes('KJ'));
-    header = 'DATE,COUPON,CAR,TOTAL,LITERS';
-    rows = list.map(d =>
-      `${d.date||''},${d.coupon||''},${d.car||''},${d.total||''},${d.liters||''}`
-    );
+    const list = filled.filter(d => (d.pump||'').includes('KJ'));
+    header = 'DATE,COUPON,CAR,TOTAL';
+    rows = list.map(d => `${d.date||''},${d.coupon||''},${d.car||''},${d.total||''}`);
   }
-
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\uFEFF'+[header,...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = type === 'ptt' ? 'fuel_ptt.csv' : 'fuel_kjoil.csv';
+  a.download = type === 'ptt' ? 'fuel_ptt.csv' : 'fuel_kj.csv';
   a.click();
 }
 
 function resetAll() {
-  files = []; imgData = []; parsed = [];
-  document.getElementById('preview-row').innerHTML = '';
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('cnt-img').textContent  = '0';
-  document.getElementById('cnt-fill').textContent = '0';
-  document.getElementById('cnt-no').textContent   = '0';
-  document.getElementById('cnt-total').textContent = '฿0';
-  document.getElementById('btn-row').style.display    = 'none';
-  document.getElementById('export-row').style.display = 'none';
-  document.getElementById('loading').style.display    = 'none';
-  document.getElementById('progress-fill').style.width = '0%';
+  files=[]; imgData=[]; parsed=[];
+  document.getElementById('preview-row').innerHTML='';
+  document.getElementById('results').innerHTML='';
+  document.getElementById('cnt-img').textContent='0';
+  document.getElementById('cnt-fill').textContent='0';
+  document.getElementById('cnt-no').textContent='0';
+  document.getElementById('cnt-total').textContent='฿0';
+  document.getElementById('btn-row').style.display='none';
+  document.getElementById('export-row').style.display='none';
+  document.getElementById('loading').style.display='none';
+  document.getElementById('progress-fill').style.width='0%';
 }
 </script>
 </body>
