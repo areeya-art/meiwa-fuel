@@ -33,6 +33,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .progress-fill { height: 6px; background: #1a1a1a; border-radius: 8px; transition: width 0.3s; }
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
 .card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
+.card-dup { border: 1.5px solid #dc2626; background: #fff5f5; }
 .card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .car-name { font-size: 16px; font-weight: 600; }
@@ -50,6 +51,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
 .export-row { display: none; gap: 8px; margin-top: 1rem; }
 .note { font-size: 12px; color: #888; margin-top: 8px; }
+.note-dup { font-size: 12px; color: #dc2626; font-weight: 600; margin-top: 8px; }
 .warn-note { font-size: 12px; color: #92400e; margin-top: 4px; font-weight: 500; }
 .error { color: #dc2626; font-size: 13px; padding: 1rem; background: #fef2f2; border-radius: 8px; word-break: break-all; }
 @media (max-width: 400px) {
@@ -125,21 +127,117 @@ const BATCH_SIZE = 15;
 const MAX_IMG_SIZE = 1280;
 const QUALITY = 0.85;
 
-// matchFleet: exact match ก่อน แล้ว longer-key-first includes
-// แก้ปัญหา 651 โดน match เป็น 650 เพราะ includes จับ "65" ของ "650" ก่อน
+// ---------- helpers ----------
+function digitsOnly(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
+function toMile(v) { return parseInt(digitsOnly(v), 10) || 0; }
+
+// matchFleet: exact match ก่อน แล้ว longer-key-first includes (กัน 651 โดนจับเป็น 650)
 function matchFleet(raw) {
   if (!raw) return raw;
-  const clean = raw.replace(/\s/g,'').toUpperCase();
-  // 1) exact
+  const clean = String(raw).replace(/\s/g,'').toUpperCase();
   for (const [key, val] of Object.entries(FLEET)) {
     if (clean === key.replace(/\s/g,'').toUpperCase()) return val;
   }
-  // 2) includes — longer keys first เพื่อป้องกัน partial collision
   const sorted = Object.entries(FLEET).sort((a,b) => b[0].length - a[0].length);
   for (const [key, val] of sorted) {
     if (clean.includes(key.replace(/\s/g,'').toUpperCase())) return val;
   }
   return raw;
+}
+
+// แปลงวันที่ พ.ศ. → ค.ศ. และจัดรูปแบบ dd/mm/yy
+// 09/03/2569 → 09/03/26, 9/3/69 → 09/03/26, 9/3/26 → 09/03/26
+function normalizeDate(s) {
+  if (!s) return '';
+  const m = String(s).trim().match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/);
+  if (!m) return String(s).trim();
+  let yy = parseInt(m[3], 10);
+  if (yy > 2400) yy -= 543;              // พ.ศ.เต็ม 2569 → 2026
+  if (yy >= 100) yy = yy % 100;          // 2026 → 26
+  if (yy >= 43 && yy <= 99) yy -= 43;    // พ.ศ.ย่อ 69 → 26
+  return String(m[1]).padStart(2,'0') + '/' + String(m[2]).padStart(2,'0') + '/' + String(yy).padStart(2,'0');
+}
+
+// ทำความสะอาด + ตรวจความถูกต้องของ 1 รายการที่ AI ส่งมา
+function normalizeEntry(raw) {
+  const e = { ...raw };
+  e.car = matchFleet(e.car);
+  e.date = normalizeDate(e.date);
+  e.pump = e.pump || '';
+  e.note = e.note || '';
+  e.total = parseFloat(String(e.total == null ? '' : e.total).replace(/[^0-9.]/g, '')) || 0;
+  e.mile_after = digitsOnly(e.mile_after);
+
+  // invoice: ตัวเลขล้วน 17-20 หลัก ขึ้นต้นด้วย 1 เท่านั้น — ถ้าไม่ผ่านให้ว่างไว้ + เตือน
+  const inv = digitsOnly(e.invoice);
+  if (inv && (inv.length < 17 || inv.length > 20 || inv[0] !== '1')) {
+    e.invoice = '';
+    e.note = (e.note + ' | อ่าน invoice ได้ไม่ครบ (' + inv + ') โปรดคีย์จากบิล').replace(/^ \| /,'');
+  } else {
+    e.invoice = inv;
+  }
+  e.coupon = digitsOnly(e.coupon);
+
+  // บังคับความสอดคล้อง: KJ OIL ไม่มี invoice/ไมล์, PTT ไม่มีคูปอง
+  if (e.pump.includes('KJ')) { e.invoice = ''; e.mile_after = e.mile_after || ''; }
+  if (e.pump.includes('PTT')) { e.coupon = ''; }
+
+  if (e.no_fill_marked) { e.filled = false; }
+  return e;
+}
+
+// รวมผลข้ามรายการ/ข้าม batch แบบ "เติมช่องว่าง" ไม่ใช่เขียนทับทั้งก้อน
+function mergeParsed(existing, newItems) {
+  const result = [...existing];
+  for (const raw of newItems) {
+    const item = normalizeEntry(raw);
+    const idx = result.findIndex(r => r.car === item.car);
+    if (idx === -1) { result.push(item); continue; }
+    const cur = result[idx];
+
+    // มีเขียน "ไม่เติม" บนรูป → ชนะทุกอย่าง ห้ามผูกบิล
+    if (cur.no_fill_marked || item.no_fill_marked) {
+      result[idx] = { car: cur.car, filled: false, no_fill_marked: true,
+        pump:'', date:'', invoice:'', coupon:'', total:0, mile_after:'',
+        image_problem: false, note: 'มีเขียน "ไม่เติม" บนรูปหน้าปัด' };
+      continue;
+    }
+
+    const mile = Math.max(toMile(cur.mile_after), toMile(item.mile_after));
+    result[idx] = {
+      ...cur,
+      filled: cur.filled || item.filled,
+      pump: cur.pump || item.pump,
+      date: cur.date || item.date,
+      invoice: cur.invoice || item.invoice,
+      coupon: cur.coupon || item.coupon,
+      total: cur.total || item.total,
+      mile_after: mile ? String(mile) : '',
+      image_problem: cur.image_problem || item.image_problem,
+      note: [cur.note, item.note].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' | ')
+    };
+  }
+  return result;
+}
+
+// ตรวจคูปอง/invoice ซ้ำข้ามคัน — ถ้าซ้ำ ทำเครื่องหมายแดงให้เช็คเอง
+function flagDuplicates(list) {
+  const seen = {};
+  for (const d of list) {
+    if (!d.filled) continue;
+    const keys = [];
+    if (d.coupon) keys.push('คูปอง ' + d.coupon);
+    if (d.invoice) keys.push('invoice ' + d.invoice);
+    for (const k of keys) {
+      if (seen[k] && seen[k] !== d) {
+        d.dup = true; seen[k].dup = true;
+        d.note = [d.note, '⚠️ ' + k + ' ซ้ำกับ ' + seen[k].car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
+        seen[k].note = [seen[k].note, '⚠️ ' + k + ' ซ้ำกับ ' + d.car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
+      } else {
+        seen[k] = d;
+      }
+    }
+  }
 }
 
 async function compressImage(b64, type) {
@@ -188,52 +286,52 @@ function onFiles(fl) {
 }
 
 // ========== PROMPT ==========
-const PROMPT = (fleetList) => `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทุกรูปในชุดนี้ แล้วสรุปเป็น JSON array
+const PROMPT = (fleetList) => `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทุกรูปในชุดนี้แล้วสรุปเป็น JSON array
 
 ทะเบียนรถที่รู้จัก (เลขย่อ → ทะเบียนเต็ม):
 ${fleetList}
 
-เมื่อเห็นเลขย่อในรูปให้แปลงเป็นทะเบียนเต็มเสมอ
+===== กฎเหล็กข้อ 1: บิลคือแหล่งข้อมูลเดียวของรายการเติม =====
+- รายการ filled:true ทุกรายการต้องมาจากบิล/ใบเสร็จเท่านั้น
+- รถเจ้าของบิล = ทะเบียนที่เขียน/พิมพ์ "บนบิลใบนั้น" เท่านั้น ห้ามเดาจากรูปหน้าปัดที่อยู่ติดกันในชุดรูป
+- ตัวเลขเขียนมือบนบิลอาจอ่านยาก ให้เทียบกับรายการทะเบียนด้านบนแล้วเลือกตัวที่ใกล้เคียงที่สุด
+- เลขคูปอง 1 เลข เป็นของรถได้ 1 คันเท่านั้น ห้ามให้รถ 2 คันมีคูปองเลขเดียวกันเด็ดขาด
+- ใบเสร็จที่พิมพ์ซ้ำ (เลข NO: เดียวกัน หรือเลขใบกำกับเดียวกัน) = ธุรกรรมเดียว นับครั้งเดียว
 
-===== กฎการอ่านบิลแต่ละประเภท =====
+===== กฎเหล็กข้อ 2: แยกประเภทเอกสารให้ถูก =====
+[A] บิลเขียว KJ OIL — กระดาษสีเขียว หัวบิล "บิลเงินเชื่อ บริษัท เค เจ ออยล์ จำกัด"
+  - coupon = เลขพิมพ์มุมบนขวา หลังคำว่า "เลขที่" (เช่น 45635) อ่านให้ครบทุกหลัก
+  - car = ช่อง "ทะเบียนรถ" (เขียนมือ), date = ช่อง "วันที่", total = ช่อง "รวมยอด"
+[B] ใบเสร็จขาวของ KJ OIL/บางจาก — มีคำว่า "บจก.เค เจ ออยล์" หรือ www.bangchakmarketplace.com หรือบรรทัด "NO: xxxxxx"
+  - เป็นธุรกรรม KJ OIL (ใบประกอบของบิลเขียว) ไม่ใช่ PTT เด็ดขาด ห้ามใส่ invoice ให้
+  - ทะเบียนเขียนมือบนหัวใบใช้จับคู่รถได้
+[C] ใบเสร็จ PTT — มีโลโก้ pttstation / "SALE PTT Fleet" / มีบรรทัด TID: TRACE: APPR:
+  - invoice = เลขท้ายบิลหลังคำว่า "เลขที่" ยาว 17-20 หลัก ขึ้นต้นด้วย 1 (เช่น 126754125603090175)
+  - คัดลอก invoice ทีละหลักจนครบทุกตัว ห้ามตัดหลักท้าย ห้ามเว้นวรรค ห้ามแต่งเลขเอง
+  - ถ้าอ่านไม่ครบหรือไม่มั่นใจทุกหลัก ให้ใส่ "" แล้ว note ว่า "อ่าน invoice ไม่ครบ"
+  - car = บรรทัด "ทะเบียนรถ" บนสลิป, mile_after = "เลขระยะทาง(KM)", total = TOTAL
+- ห้ามสร้าง invoice ให้รถที่ไม่มีใบเสร็จ PTT ของตัวเองเด็ดขาด
 
-[PTT]
-- บิลพิมพ์ มีโลโก้ PTT
-- ดึง: วันที่ (date), เลขที่ใบกำกับภาษี (invoice — เลข 17-20 หลัก ขึ้นต้นด้วย 1 อยู่ท้ายบิล ไม่ใช่ TID/TRACE/APPR), ทะเบียน (car), ยอดเงิน (total), ไมล์หลังเติม (mile_after — จากช่อง "เลขระยะทาง(KM)" หรือเลขที่มากกว่าในหน้าปัด)
-- pump = "PTT"
+===== กฎเหล็กข้อ 3: รูปหน้าปัดไมล์ =====
+- รูปหน้าปัด (มีป้ายทะเบียนแปะ) ใช้บอกเลขไมล์ ODO ของรถคันนั้นเท่านั้น ห้ามสร้างรายการเติมจากรูปหน้าปัด
+- ถ้ามีเขียนคำว่า "ไม่เติม" บนรูป → no_fill_marked:true, filled:false ห้ามผูกบิลใดๆ กับคันนี้เด็ดขาด
+- หน้าปัด 2 รูปของคันเดียว: เลขมากกว่า = หลังเติม ใช้เป็น mile_after (เฉพาะรถที่มีบิล PTT)
+- รถที่มีแต่รูปหน้าปัดและไม่มีบิลในชุดนี้ → filled:false (ชุดรูปอาจถูกแบ่งส่ง ระบบจะรวมผลให้ภายหลัง)
 
-[KJ OIL]
-- บิลเขียนมือสีเขียว หัวบิล "บริษัท เค เจ ออยล์ จำกัด"
-- coupon = เลขที่พิมพ์ไว้มุมบนขวาของบิลสีเขียว หลังคำว่า "เลขที่" ตัวเลขอย่างเดียว ไม่มีตัวอักษร ตัวอย่าง: 45635 / 12800 / 9001
-  *** อ่านให้ละเอียด เลขนี้มักพิมพ์เป็นตัวเลขขนาดใหญ่ชัดเจน ***
-- car = อ่านจากช่อง "ทะเบียนรถ" บนบิลสีเขียว (มักเขียนมือ)
-- date = วันที่บนบิล (มักเขียนมือในช่อง "วันที่")
-- total = รวมยอด (บรรทัดสุดท้าย)
-- ไม่ต้องมี invoice และ mile_after
-- pump = "KJ OIL"
+===== วันที่ =====
+- แปลงปี พ.ศ. เป็น ค.ศ. เสมอ: 2569→26, 69→26 ตอบรูปแบบ dd/mm/yy เช่น 09/03/26
 
-===== กฎ filled / ไม่เติม =====
-- filled = true ถ้ามีบิลที่อ่านได้ครบ (วันที่ + ทะเบียน + ยอด) ไม่ว่าจะมีรูปหน้าปัดหรือไม่
-- filled = false ถ้าไม่มีบิล หรือมีแค่รูปหน้าปัดไมล์โดยไม่มีบิลเลย
-- ถ้ามีรูปหน้าปัด 2 รูปของรถเดียวกัน (เลขน้อย = ก่อนเติม, เลขมาก = หลังเติม) → ใช้เลขมากเป็น mile_after
-- ถ้ารูปหน้าปัดหลังเติมเห็นเกจน้ำมันเต็มขีดหรือเกือบเต็ม → note ว่า "มีรูปหลังเติม ไม่พบบิลในชุดนี้" และ filled = true
-- ห้ามสร้างรายการซ้ำจากทะเบียนเดียวกัน
-
-===== กฎอื่น =====
-- image_problem = true เฉพาะกรณีรูปเบลอมากจนอ่านเลขไม่ได้เลย
-- ถ้าหา coupon ไม่เจอให้ใส่ "" (ว่าง) ห้ามใส่ "-" หรือ "ไม่พบ"
-- ถ้าหา invoice ไม่เจอให้ใส่ "" (ว่าง)
-
-ตอบด้วย JSON array เท่านั้น ห้ามพิมพ์อะไรก่อนหรือหลัง ห้ามใช้ markdown เริ่มต้นด้วย [ และจบด้วย ] เท่านั้น:
+ตอบเป็น JSON array เท่านั้น ห้ามพิมพ์อะไรก่อนหรือหลัง ห้ามใช้ markdown เริ่มด้วย [ จบด้วย ] เท่านั้น:
 [{
   "car": "ทะเบียนเต็ม",
   "filled": true,
-  "pump": "PTT หรือ KJ OIL",
-  "date": "dd/mm/yy",
-  "invoice": "เฉพาะ PTT: เลขยาว 17-20 หลัก ขึ้นต้นด้วย 1",
-  "coupon": "เฉพาะ KJ OIL: ตัวเลขจากมุมบนขวาบิลสีเขียว เช่น 45635",
+  "no_fill_marked": false,
+  "pump": "PTT" หรือ "KJ OIL",
+  "date": "09/03/26",
+  "invoice": "เฉพาะ PTT: เลข 17-20 หลักขึ้นต้นด้วย 1 ครบทุกหลัก",
+  "coupon": "เฉพาะ KJ OIL: เลขที่บนบิลเขียว เช่น 45635",
   "total": 400,
-  "mile_after": "เฉพาะ PTT: เลขไมล์หลังเติม",
+  "mile_after": "เฉพาะ PTT",
   "image_problem": false,
   "note": ""
 }]`;
@@ -267,24 +365,6 @@ async function callAPI(images) {
   return JSON.parse(txt.substring(start, end+1));
 }
 
-function mergeParsed(existing, newItems) {
-  const result = [...existing];
-  for (const item of newItems) {
-    const car = matchFleet(item.car);
-    const idx = result.findIndex(r => r.car === car);
-    if (idx === -1) {
-      result.push({ ...item, car });
-    } else {
-      if (item.filled && !result[idx].filled) {
-        result[idx] = { ...item, car };
-      } else if (item.filled && result[idx].filled) {
-        if ((item.mile_after || 0) > (result[idx].mile_after || 0)) result[idx] = { ...item, car };
-      }
-    }
-  }
-  return result;
-}
-
 async function analyze() {
   if (!imgData.length) return;
   const btn = document.getElementById('analyze-btn');
@@ -305,6 +385,7 @@ async function analyze() {
       parsed = mergeParsed(parsed, await callAPI(batches[i]));
     }
     document.getElementById('progress-fill').style.width = '100%';
+    flagDuplicates(parsed);
     renderResults(parsed);
   } catch(e) {
     document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: '+e.message+'</div>';
@@ -346,12 +427,12 @@ function renderResults(data) {
       const isKJ  = pump.includes('KJ');
       const tagCls = isPTT ? 'tag-ptt' : 'tag-kj';
 
-      const couponVal  = d.coupon  || '⚠️ ไม่พบ';
-      const invoiceVal = d.invoice || '⚠️ ไม่พบ';
+      const couponVal  = d.coupon  || '⚠️ ไม่พบ — คีย์เอง';
+      const invoiceVal = d.invoice || '⚠️ ไม่พบ — คีย์เอง';
       const couponStyle  = !d.coupon  ? 'color:#dc2626;font-weight:600' : '';
       const invoiceStyle = !d.invoice ? 'color:#dc2626;font-weight:600' : '';
 
-      html += `<div class="card">
+      html += `<div class="card${d.dup ? ' card-dup' : ''}">
         <div class="card-header">
           <span class="car-name">${d.car||'-'}</span>
           <span class="tag ${tagCls}">${pump}</span>
@@ -365,7 +446,7 @@ function renderResults(data) {
           ${isKJ ? `
           <div class="field"><div class="field-label">เลขที่คูปอง</div><div class="field-val" style="${couponStyle}">${couponVal}</div></div>` : ''}
         </div>
-        ${d.note ? `<div class="note">${d.note}</div>` : ''}
+        ${d.note ? `<div class="${d.dup ? 'note-dup' : 'note'}">${d.note}</div>` : ''}
       </div>`;
     }
   }
@@ -375,7 +456,7 @@ function renderResults(data) {
     <div class="no-fill-box">
       <div style="font-size:13px;color:#888;">รถที่ไม่เติมวันนี้ (${nofill.length} คัน)</div>
       <div class="no-fill-grid">`;
-    for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}</div>`;
+    for (let d of nofill) html += `<div class="no-fill-tag">🚗 ${d.car||'-'}${d.no_fill_marked ? ' ✍️' : ''}</div>`;
     html += '</div></div>';
   }
 
@@ -389,7 +470,8 @@ function exportCSV(type) {
   if (type === 'ptt') {
     const list = filled.filter(d => (d.pump||'').includes('PTT'));
     header = 'DATE,INVOICE NO.,CAR,TOTAL,MILE';
-    rows = list.map(d => `${d.date||''},${d.invoice||''},${d.car||''},${d.total||''},${d.mile_after||''}`);
+    // invoice ห่อเป็น ="..." กัน Excel แปลงเลข 18 หลักเป็น 1.26E+17
+    rows = list.map(d => `${d.date||''},${d.invoice ? '="'+d.invoice+'"' : ''},${d.car||''},${d.total||''},${d.mile_after||''}`);
   } else {
     const list = filled.filter(d => (d.pump||'').includes('KJ'));
     header = 'DATE,COUPON,CAR,TOTAL';
