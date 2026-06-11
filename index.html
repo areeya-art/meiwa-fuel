@@ -33,7 +33,7 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .progress-fill { height: 6px; background: #1a1a1a; border-radius: 8px; transition: width 0.3s; }
 .section-label { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 1.5rem 0 8px; }
 .card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
-.card-dup { border: 1.5px solid #dc2626; background: #fff5f5; }
+.card-alert { border: 1.5px solid #dc2626; background: #fff5f5; }
 .card-warn { background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 1rem; margin-bottom: 8px; }
 .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .car-name { font-size: 16px; font-weight: 600; }
@@ -51,8 +51,8 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 .no-fill-tag { background: #f5f5f5; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #666; }
 .export-row { display: none; gap: 8px; margin-top: 1rem; }
 .note { font-size: 12px; color: #888; margin-top: 8px; }
-.note-dup { font-size: 12px; color: #dc2626; font-weight: 600; margin-top: 8px; }
-.warn-note { font-size: 12px; color: #92400e; margin-top: 4px; font-weight: 500; }
+.note-alert { font-size: 12px; color: #dc2626; font-weight: 600; margin-top: 8px; }
+.warn-note { font-size: 12px; color: #92400e; margin-top: 8px; font-weight: 500; }
 .error { color: #dc2626; font-size: 13px; padding: 1rem; background: #fef2f2; border-radius: 8px; word-break: break-all; }
 @media (max-width: 400px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -123,6 +123,9 @@ const FLEET = {
   "FORKLIFT":"โฟล์คลิฟท์","SERCOOLER":"เซอร์คูลเลอร์"
 };
 
+// บัตร PTT VIP ใช้ร่วมกัน 2 คันนี้ — ระบุคันจากการเทียบเลขไมล์บนบิลกับรูปหน้าปัด
+const VIP_CARS = ['2ฒม 1606', 'บท 7274'];
+
 const BATCH_SIZE = 15;
 const MAX_IMG_SIZE = 1280;
 const QUALITY = 0.85;
@@ -146,7 +149,6 @@ function matchFleet(raw) {
 }
 
 // แปลงวันที่ พ.ศ. → ค.ศ. และจัดรูปแบบ dd/mm/yy
-// 09/03/2569 → 09/03/26, 9/3/69 → 09/03/26, 9/3/26 → 09/03/26
 function normalizeDate(s) {
   if (!s) return '';
   const m = String(s).trim().match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/);
@@ -161,25 +163,36 @@ function normalizeDate(s) {
 // ทำความสะอาด + ตรวจความถูกต้องของ 1 รายการที่ AI ส่งมา
 function normalizeEntry(raw) {
   const e = { ...raw };
-  e.car = matchFleet(e.car);
-  e.date = normalizeDate(e.date);
-  e.pump = e.pump || '';
   e.note = e.note || '';
+  e.pump = e.pump || '';
+  e.date = normalizeDate(e.date);
   e.total = parseFloat(String(e.total == null ? '' : e.total).replace(/[^0-9.]/g, '')) || 0;
   e.mile_after = digitsOnly(e.mile_after);
+  e.flagged = !!e.flagged;
+
+  // บัตร VIP ที่ AI ระบุคันไม่ได้ → ติดธงแดงให้เลือกเอง (เช็คก่อน matchFleet
+  // เพราะข้อความ "VIP (1606/7274)" มีเลข 1606 อยู่ จะโดน match ผิด)
+  const rawCar = String(raw.car == null ? '' : raw.car);
+  if (/VIP/i.test(rawCar)) {
+    e.car = 'VIP — ' + VIP_CARS.join(' หรือ ');
+    e.flagged = true;
+    e.note = [e.note, 'บัตร VIP ระบุรถอัตโนมัติไม่ได้ โปรดเลือกคันแล้วคีย์เอง'].filter(Boolean).join(' | ');
+  } else {
+    e.car = matchFleet(rawCar);
+  }
 
   // invoice: ตัวเลขล้วน 17-20 หลัก ขึ้นต้นด้วย 1 เท่านั้น — ถ้าไม่ผ่านให้ว่างไว้ + เตือน
   const inv = digitsOnly(e.invoice);
   if (inv && (inv.length < 17 || inv.length > 20 || inv[0] !== '1')) {
     e.invoice = '';
-    e.note = (e.note + ' | อ่าน invoice ได้ไม่ครบ (' + inv + ') โปรดคีย์จากบิล').replace(/^ \| /,'');
+    e.note = [e.note, 'อ่าน invoice ได้ไม่ครบ (' + inv + ') โปรดคีย์จากบิล'].filter(Boolean).join(' | ');
   } else {
     e.invoice = inv;
   }
   e.coupon = digitsOnly(e.coupon);
 
-  // บังคับความสอดคล้อง: KJ OIL ไม่มี invoice/ไมล์, PTT ไม่มีคูปอง
-  if (e.pump.includes('KJ')) { e.invoice = ''; e.mile_after = e.mile_after || ''; }
+  // บังคับความสอดคล้อง: KJ OIL ไม่มี invoice, PTT ไม่มีคูปอง
+  if (e.pump.includes('KJ')) { e.invoice = ''; }
   if (e.pump.includes('PTT')) { e.coupon = ''; }
 
   if (e.no_fill_marked) { e.filled = false; }
@@ -199,9 +212,16 @@ function mergeParsed(existing, newItems) {
     if (cur.no_fill_marked || item.no_fill_marked) {
       result[idx] = { car: cur.car, filled: false, no_fill_marked: true,
         pump:'', date:'', invoice:'', coupon:'', total:0, mile_after:'',
-        image_problem: false, note: 'มีเขียน "ไม่เติม" บนรูปหน้าปัด' };
+        image_problem: false, flagged: false, note: 'มีเขียน "ไม่เติม" บนรูปหน้าปัด' };
       continue;
     }
+
+    // note: ถ้าฝั่งหนึ่งเจอบิล อีกฝั่งเจอแต่หน้าปัด → ใช้ note ฝั่งที่เจอบิลเท่านั้น
+    // (กัน note ค้างแบบ "ไม่มีบิลในชุดนี้" ทั้งที่อีก batch เจอบิลแล้ว)
+    let note;
+    if (cur.filled && !item.filled)      note = cur.note;
+    else if (!cur.filled && item.filled) note = item.note;
+    else note = [cur.note, item.note].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' | ');
 
     const mile = Math.max(toMile(cur.mile_after), toMile(item.mile_after));
     result[idx] = {
@@ -214,7 +234,8 @@ function mergeParsed(existing, newItems) {
       total: cur.total || item.total,
       mile_after: mile ? String(mile) : '',
       image_problem: cur.image_problem || item.image_problem,
-      note: [cur.note, item.note].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' | ')
+      flagged: cur.flagged || item.flagged,
+      note: note
     };
   }
   return result;
@@ -230,7 +251,7 @@ function flagDuplicates(list) {
     if (d.invoice) keys.push('invoice ' + d.invoice);
     for (const k of keys) {
       if (seen[k] && seen[k] !== d) {
-        d.dup = true; seen[k].dup = true;
+        d.flagged = true; seen[k].flagged = true;
         d.note = [d.note, '⚠️ ' + k + ' ซ้ำกับ ' + seen[k].car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
         seen[k].note = [seen[k].note, '⚠️ ' + k + ' ซ้ำกับ ' + d.car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
       } else {
@@ -308,7 +329,6 @@ ${fleetList}
 [C] ใบเสร็จ PTT — มีโลโก้ pttstation / "SALE PTT Fleet" / มีบรรทัด TID: TRACE: APPR:
   - invoice = เลขท้ายบิลหลังคำว่า "เลขที่" ยาว 17-20 หลัก ขึ้นต้นด้วย 1 (เช่น 126754125603090175)
   - คัดลอก invoice ทีละหลักจนครบทุกตัว ห้ามตัดหลักท้าย ห้ามเว้นวรรค ห้ามแต่งเลขเอง
-  - ถ้าอ่านไม่ครบหรือไม่มั่นใจทุกหลัก ให้ใส่ "" แล้ว note ว่า "อ่าน invoice ไม่ครบ"
   - car = บรรทัด "ทะเบียนรถ" บนสลิป, mile_after = "เลขระยะทาง(KM)", total = TOTAL
 - ห้ามสร้าง invoice ให้รถที่ไม่มีใบเสร็จ PTT ของตัวเองเด็ดขาด
 
@@ -316,7 +336,19 @@ ${fleetList}
 - รูปหน้าปัด (มีป้ายทะเบียนแปะ) ใช้บอกเลขไมล์ ODO ของรถคันนั้นเท่านั้น ห้ามสร้างรายการเติมจากรูปหน้าปัด
 - ถ้ามีเขียนคำว่า "ไม่เติม" บนรูป → no_fill_marked:true, filled:false ห้ามผูกบิลใดๆ กับคันนี้เด็ดขาด
 - หน้าปัด 2 รูปของคันเดียว: เลขมากกว่า = หลังเติม ใช้เป็น mile_after (เฉพาะรถที่มีบิล PTT)
-- รถที่มีแต่รูปหน้าปัดและไม่มีบิลในชุดนี้ → filled:false (ชุดรูปอาจถูกแบ่งส่ง ระบบจะรวมผลให้ภายหลัง)
+- รถที่มีแต่รูปหน้าปัดและไม่มีบิลในชุดนี้ → filled:false, note:"" (ชุดรูปอาจถูกแบ่งส่ง ระบบจะรวมผลให้เอง ไม่ต้องเขียนหมายเหตุ)
+
+===== กฎเหล็กข้อ 4: ข้อมูลที่มองไม่เห็น = ไม่มี ห้ามยืม ห้ามเดา =====
+- ถ้าส่วนใดของบิลถูกนิ้วบัง / ถ่ายไม่ติด / ขาดหาย / เบลอ → ให้ field นั้นเป็น "" เท่านั้น
+- ห้ามหยิบเลขจากบิลใบอื่นในชุดมาใส่แทนเด็ดขาด ต่อให้รูปแบบเลขดูคล้ายกัน
+- ตัวอย่างที่ห้ามทำ: บิลของ 3ฒล 4531 มองไม่เห็นเลขที่ท้ายบิล แล้วไปคัดเลขที่จากบิลของ 4ฒข 4081 มาใส่ให้ 4531 — ผิดร้ายแรง ที่ถูกคือ invoice:"" และ note:"invoice ถูกบัง/อ่านไม่ได้"
+- บิลที่อ่านข้อมูลหลักได้ครบ (ทะเบียน + ยอดเงิน + วันที่) แต่ invoice หรือคูปองอ่านไม่ได้ → ยังเป็น filled:true ปกติ ห้ามใส่ image_problem แค่เว้น field นั้นว่างแล้วบอกใน note
+- image_problem:true ใช้เฉพาะกรณีอ่านข้อมูลหลักไม่ได้เลย (ไม่รู้ว่าทะเบียนอะไร หรือไม่รู้ยอดเงิน)
+
+===== บัตร PTT VIP =====
+- ใบเสร็จ PTT บางใบพิมพ์ทะเบียนรถว่า "VIP" — บัตรนี้ใช้ร่วมกัน 2 คัน: 2ฒม 1606 และ บท 7274
+- วิธีระบุคัน: เทียบ "เลขระยะทาง(KM)" บนบิล กับเลข ODO บนรูปหน้าปัดในชุด คันที่เลขใกล้เคียงกัน (ต่างกันไม่เกินหลักสิบกิโลเมตร) คือเจ้าของบิล แล้วใช้ทะเบียนจากป้ายบนหน้าปัดคันนั้น พร้อม note:"บิล VIP ระบุจากเลขไมล์"
+- ถ้าไม่มีรูปหน้าปัดให้เทียบ หรือเลขไม่ใกล้เคียงสักคัน → car:"VIP" (ระบบจะให้ผู้ใช้เลือกเอง)
 
 ===== วันที่ =====
 - แปลงปี พ.ศ. เป็น ค.ศ. เสมอ: 2569→26, 69→26 ตอบรูปแบบ dd/mm/yy เช่น 09/03/26
@@ -328,8 +360,8 @@ ${fleetList}
   "no_fill_marked": false,
   "pump": "PTT" หรือ "KJ OIL",
   "date": "09/03/26",
-  "invoice": "เฉพาะ PTT: เลข 17-20 หลักขึ้นต้นด้วย 1 ครบทุกหลัก",
-  "coupon": "เฉพาะ KJ OIL: เลขที่บนบิลเขียว เช่น 45635",
+  "invoice": "เฉพาะ PTT: เลข 17-20 หลักขึ้นต้นด้วย 1 ครบทุกหลัก หรือ \"\" ถ้าอ่านไม่ได้",
+  "coupon": "เฉพาะ KJ OIL: เลขที่บนบิลเขียว หรือ \"\" ถ้าอ่านไม่ได้",
   "total": 400,
   "mile_after": "เฉพาะ PTT",
   "image_problem": false,
@@ -394,6 +426,25 @@ async function analyze() {
   btn.disabled = false;
 }
 
+// สร้างตารางช่องข้อมูลของการ์ด (ใช้ทั้งการ์ดปกติและการ์ดรูปไม่ชัด)
+function fieldsHtml(d) {
+  const pump  = d.pump||'';
+  const isPTT = pump.includes('PTT');
+  const isKJ  = pump.includes('KJ');
+  const couponVal  = d.coupon  || '⚠️ ไม่พบ — คีย์เอง';
+  const invoiceVal = d.invoice || '⚠️ ไม่พบ — คีย์เอง';
+  const couponStyle  = !d.coupon  ? 'color:#dc2626;font-weight:600' : '';
+  const invoiceStyle = !d.invoice ? 'color:#dc2626;font-weight:600' : '';
+  return `<div class="fields">
+    <div class="field"><div class="field-label">วันที่</div><div class="field-val">${d.date||'-'}</div></div>
+    ${isPTT ? `
+    <div class="field"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px;${invoiceStyle}">${invoiceVal}</div></div>
+    <div class="field"><div class="field-label">ไมล์หลังเติม</div><div class="field-val">${d.mile_after||'-'}</div></div>` : ''}
+    ${isKJ ? `
+    <div class="field"><div class="field-label">เลขที่คูปอง</div><div class="field-val" style="${couponStyle}">${couponVal}</div></div>` : ''}
+  </div>`;
+}
+
 function renderResults(data) {
   const filled = data.filter(d => d.filled && !d.image_problem);
   const nofill = data.filter(d => !d.filled);
@@ -413,7 +464,9 @@ function renderResults(data) {
         <div class="card-header">
           <span class="car-name">${d.car||'-'}</span>
           <span class="tag tag-warn">⚠️ รูปไม่ชัด</span>
+          ${d.total ? `<span class="amount">฿${d.total.toLocaleString()}</span>` : ''}
         </div>
+        ${d.pump ? fieldsHtml(d) : ''}
         <div class="warn-note">${d.note||'กรุณาตรวจสอบและคีย์ข้อมูลเอง'}</div>
       </div>`;
     }
@@ -424,29 +477,15 @@ function renderResults(data) {
     for (let d of filled) {
       const pump  = d.pump||'';
       const isPTT = pump.includes('PTT');
-      const isKJ  = pump.includes('KJ');
       const tagCls = isPTT ? 'tag-ptt' : 'tag-kj';
-
-      const couponVal  = d.coupon  || '⚠️ ไม่พบ — คีย์เอง';
-      const invoiceVal = d.invoice || '⚠️ ไม่พบ — คีย์เอง';
-      const couponStyle  = !d.coupon  ? 'color:#dc2626;font-weight:600' : '';
-      const invoiceStyle = !d.invoice ? 'color:#dc2626;font-weight:600' : '';
-
-      html += `<div class="card${d.dup ? ' card-dup' : ''}">
+      html += `<div class="card${d.flagged ? ' card-alert' : ''}">
         <div class="card-header">
           <span class="car-name">${d.car||'-'}</span>
           <span class="tag ${tagCls}">${pump}</span>
           <span class="amount">฿${(d.total||0).toLocaleString()}</span>
         </div>
-        <div class="fields">
-          <div class="field"><div class="field-label">วันที่</div><div class="field-val">${d.date||'-'}</div></div>
-          ${isPTT ? `
-          <div class="field"><div class="field-label">Invoice</div><div class="field-val" style="font-size:10px;${invoiceStyle}">${invoiceVal}</div></div>
-          <div class="field"><div class="field-label">ไมล์หลังเติม</div><div class="field-val">${d.mile_after||'-'}</div></div>` : ''}
-          ${isKJ ? `
-          <div class="field"><div class="field-label">เลขที่คูปอง</div><div class="field-val" style="${couponStyle}">${couponVal}</div></div>` : ''}
-        </div>
-        ${d.note ? `<div class="${d.dup ? 'note-dup' : 'note'}">${d.note}</div>` : ''}
+        ${fieldsHtml(d)}
+        ${d.note ? `<div class="${d.flagged ? 'note-alert' : 'note'}">${d.note}</div>` : ''}
       </div>`;
     }
   }
