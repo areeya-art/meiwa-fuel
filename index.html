@@ -104,6 +104,17 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; }
 </div>
 
 <script>
+/* =====================================================================
+   สถาปัตยกรรมใหม่ (v5):
+   - AI ทำหน้าที่เดียว = "คัดลอก" สิ่งที่เห็นในรูป ทีละใบ/ทีละรูป
+     บิล 1 ใบ = 1 แถวใน bills, หน้าปัด 1 รูป = 1 แถวใน dashboards
+     AI ห้ามจับคู่ ห้ามตัดสินใจ ห้ามสรุปว่าใครเติม/ไม่เติม
+   - JavaScript เป็นคนจับคู่ทั้งหมด (deterministic ทำซ้ำได้ผลเหมือนเดิม):
+     dedupe บิลถ่ายซ้ำ → จับคู่บิลเขียว+ใบขาว → ระบุรถบัตร VIP จากเลขไมล์
+     → ผูกไมล์หน้าปัด → ตรวจ "ไม่เติม" → ตรวจเลขซ้ำ
+   - บิลใบเดียวจึงเกิดเป็น 2 คันไม่ได้เชิงโครงสร้าง
+   ===================================================================== */
+
 // ========== FLEET REGISTRY ==========
 const FLEET = {
   "7858":"3ฒร 7858","7852":"3ฒร 7852","7862":"3ฒร 7862","7845":"3ฒร 7845",
@@ -123,8 +134,13 @@ const FLEET = {
   "FORKLIFT":"โฟล์คลิฟท์","SERCOOLER":"เซอร์คูลเลอร์"
 };
 
-// บัตร PTT VIP ใช้ร่วมกัน 2 คันนี้ — ระบุคันจากการเทียบเลขไมล์บนบิลกับรูปหน้าปัด
+// บัตร PTT VIP ใช้ร่วมกัน 2 คันนี้ — JS ระบุคันโดยเทียบเลขไมล์บนบิลกับ ODO หน้าปัด
 const VIP_CARS = ['2ฒม 1606', 'บท 7274'];
+const VIP_KM_TOLERANCE = 50; // ไมล์บนบิลกับ ODO ต่างกันไม่เกินกี่ km ถึงถือว่าคันเดียวกัน
+
+// บิล PTT ที่ผ่านมา invoice เป็น 18 หลักทั้งหมด — ถ้าวันหนึ่งเจอของจริง 17 หลัก แก้เลขนี้เป็น 17
+const INVOICE_MIN_LEN = 18;
+const INVOICE_MAX_LEN = 20;
 
 const BATCH_SIZE = 15;
 const MAX_IMG_SIZE = 1280;
@@ -133,10 +149,13 @@ const QUALITY = 0.85;
 // ---------- helpers ----------
 function digitsOnly(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
 function toMile(v) { return parseInt(digitsOnly(v), 10) || 0; }
+function noteJoin() {
+  return Array.from(arguments).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' | ');
+}
 
 // matchFleet: exact match ก่อน แล้ว longer-key-first includes (กัน 651 โดนจับเป็น 650)
 function matchFleet(raw) {
-  if (!raw) return raw;
+  if (!raw) return '';
   const clean = String(raw).replace(/\s/g,'').toUpperCase();
   for (const [key, val] of Object.entries(FLEET)) {
     if (clean === key.replace(/\s/g,'').toUpperCase()) return val;
@@ -145,103 +164,190 @@ function matchFleet(raw) {
   for (const [key, val] of sorted) {
     if (clean.includes(key.replace(/\s/g,'').toUpperCase())) return val;
   }
-  return raw;
+  return String(raw).trim();
 }
 
-// แปลงวันที่ พ.ศ. → ค.ศ. และจัดรูปแบบ dd/mm/yy
+// แปลงวันที่ พ.ศ. → ค.ศ. รูปแบบ dd/mm/yy (2569→26, 69→26, 26→26)
 function normalizeDate(s) {
   if (!s) return '';
   const m = String(s).trim().match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/);
   if (!m) return String(s).trim();
   let yy = parseInt(m[3], 10);
-  if (yy > 2400) yy -= 543;              // พ.ศ.เต็ม 2569 → 2026
-  if (yy >= 100) yy = yy % 100;          // 2026 → 26
-  if (yy >= 43 && yy <= 99) yy -= 43;    // พ.ศ.ย่อ 69 → 26
+  if (yy > 2400) yy -= 543;
+  if (yy >= 100) yy = yy % 100;
+  if (yy >= 43 && yy <= 99) yy -= 43;
   return String(m[1]).padStart(2,'0') + '/' + String(m[2]).padStart(2,'0') + '/' + String(yy).padStart(2,'0');
 }
 
-// ทำความสะอาด + ตรวจความถูกต้องของ 1 รายการที่ AI ส่งมา
-function normalizeEntry(raw) {
-  const e = { ...raw };
-  e.note = e.note || '';
-  e.pump = e.pump || '';
-  e.date = normalizeDate(e.date);
-  e.total = parseFloat(String(e.total == null ? '' : e.total).replace(/[^0-9.]/g, '')) || 0;
-  e.mile_after = digitsOnly(e.mile_after);
-  e.flagged = !!e.flagged;
+// ---------- ทำความสะอาดข้อมูลดิบจาก AI ----------
+function normalizeBill(raw) {
+  const b = {};
+  const doc = String(raw.doc || '').toUpperCase();
+  if (doc.includes('PTT')) b.doc = 'PTT';
+  else if (doc.includes('WHITE')) b.doc = 'KJ_WHITE';
+  else if (doc.includes('GREEN')) b.doc = 'KJ_GREEN';
+  else b.doc = raw.coupon ? 'KJ_GREEN' : (raw.txn ? 'KJ_WHITE' : 'PTT');
 
-  // บัตร VIP ที่ AI ระบุคันไม่ได้ → ติดธงแดงให้เลือกเอง (เช็คก่อน matchFleet
-  // เพราะข้อความ "VIP (1606/7274)" มีเลข 1606 อยู่ จะโดน match ผิด)
-  const rawCar = String(raw.car == null ? '' : raw.car);
-  if (/VIP/i.test(rawCar)) {
-    e.car = 'VIP — ' + VIP_CARS.join(' หรือ ');
-    e.flagged = true;
-    e.note = [e.note, 'บัตร VIP ระบุรถอัตโนมัติไม่ได้ โปรดเลือกคันแล้วคีย์เอง'].filter(Boolean).join(' | ');
+  b.carRaw = String(raw.car == null ? '' : raw.car).trim();
+  b.isVIP = /VIP/i.test(b.carRaw);
+  b.car = b.isVIP ? '' : matchFleet(b.carRaw);
+  b.date = normalizeDate(raw.date);
+  b.total = parseFloat(String(raw.total == null ? '' : raw.total).replace(/[^0-9.]/g, '')) || 0;
+  b.km = digitsOnly(raw.km);
+  b.txn = digitsOnly(raw.txn);
+  b.coupon = digitsOnly(raw.coupon);
+  b.unreadable = !!raw.unreadable;
+  b.flagged = false;
+  b.note = String(raw.note || '');
+
+  // invoice: ต้องครบทุกหลัก (ปกติ 18) ขึ้นต้นด้วย 1 — ไม่ครบ = เว้นว่างให้คีย์เอง
+  const inv = digitsOnly(raw.invoice);
+  if (inv && (inv.length < INVOICE_MIN_LEN || inv.length > INVOICE_MAX_LEN || inv[0] !== '1')) {
+    b.invoice = '';
+    b.note = noteJoin(b.note, 'อ่าน invoice ได้ไม่ครบ (เห็น ' + inv.length + ' หลัก: ' + inv + ') โปรดคีย์จากบิลจริง');
   } else {
-    e.car = matchFleet(rawCar);
+    b.invoice = inv;
   }
-
-  // invoice: ตัวเลขล้วน 17-20 หลัก ขึ้นต้นด้วย 1 เท่านั้น — ถ้าไม่ผ่านให้ว่างไว้ + เตือน
-  const inv = digitsOnly(e.invoice);
-  if (inv && (inv.length < 17 || inv.length > 20 || inv[0] !== '1')) {
-    e.invoice = '';
-    e.note = [e.note, 'อ่าน invoice ได้ไม่ครบ (' + inv + ') โปรดคีย์จากบิล'].filter(Boolean).join(' | ');
-  } else {
-    e.invoice = inv;
-  }
-  e.coupon = digitsOnly(e.coupon);
-
-  // บังคับความสอดคล้อง: KJ OIL ไม่มี invoice, PTT ไม่มีคูปอง
-  if (e.pump.includes('KJ')) { e.invoice = ''; }
-  if (e.pump.includes('PTT')) { e.coupon = ''; }
-
-  if (e.no_fill_marked) { e.filled = false; }
-  return e;
+  if (b.doc !== 'PTT') b.invoice = '';
+  if (b.doc !== 'KJ_GREEN') b.coupon = '';
+  return b;
 }
 
-// รวมผลข้ามรายการ/ข้าม batch แบบ "เติมช่องว่าง" ไม่ใช่เขียนทับทั้งก้อน
-function mergeParsed(existing, newItems) {
-  const result = [...existing];
-  for (const raw of newItems) {
-    const item = normalizeEntry(raw);
-    const idx = result.findIndex(r => r.car === item.car);
-    if (idx === -1) { result.push(item); continue; }
-    const cur = result[idx];
+function normalizeDash(raw) {
+  return {
+    car: matchFleet(raw.car),
+    odo: toMile(raw.odo),
+    no_fill: !!raw.no_fill
+  };
+}
 
-    // มีเขียน "ไม่เติม" บนรูป → ชนะทุกอย่าง ห้ามผูกบิล
-    if (cur.no_fill_marked || item.no_fill_marked) {
-      result[idx] = { car: cur.car, filled: false, no_fill_marked: true,
-        pump:'', date:'', invoice:'', coupon:'', total:0, mile_after:'',
-        image_problem: false, flagged: false, note: 'มีเขียน "ไม่เติม" บนรูปหน้าปัด' };
-      continue;
+// ---------- รวมบิลที่ถ่ายซ้ำ/พิมพ์ซ้ำ ให้เหลือใบเดียว พร้อมเติมช่องว่างให้กัน ----------
+function dedupeBills(bills) {
+  const out = [];
+  for (const b of bills) {
+    const match = out.find(o =>
+      o.doc === b.doc &&
+      (o.car === b.car || !o.car || !b.car) &&
+      (!o.date || !b.date || o.date === b.date) &&
+      Math.abs(o.total - b.total) < 1 &&
+      (!o.invoice || !b.invoice || o.invoice === b.invoice) &&
+      (!o.coupon  || !b.coupon  || o.coupon  === b.coupon)  &&
+      (!o.txn     || !b.txn     || o.txn     === b.txn)
+    );
+    if (match) {
+      if (!match.car) match.car = b.car;
+      if (!match.date) match.date = b.date;
+      if (!match.invoice) { match.invoice = b.invoice; if (b.invoice) match.note = (match.note||'').replace(/อ่าน invoice ได้ไม่ครบ[^|]*/,'').replace(/^\s*\|\s*|\s*\|\s*$/g,''); }
+      if (!match.coupon) match.coupon = b.coupon;
+      if (!match.txn) match.txn = b.txn;
+      if (!match.km) match.km = b.km;
+      match.isVIP = match.isVIP || b.isVIP;
+    } else {
+      out.push({ ...b });
     }
-
-    // note: ถ้าฝั่งหนึ่งเจอบิล อีกฝั่งเจอแต่หน้าปัด → ใช้ note ฝั่งที่เจอบิลเท่านั้น
-    // (กัน note ค้างแบบ "ไม่มีบิลในชุดนี้" ทั้งที่อีก batch เจอบิลแล้ว)
-    let note;
-    if (cur.filled && !item.filled)      note = cur.note;
-    else if (!cur.filled && item.filled) note = item.note;
-    else note = [cur.note, item.note].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' | ');
-
-    const mile = Math.max(toMile(cur.mile_after), toMile(item.mile_after));
-    result[idx] = {
-      ...cur,
-      filled: cur.filled || item.filled,
-      pump: cur.pump || item.pump,
-      date: cur.date || item.date,
-      invoice: cur.invoice || item.invoice,
-      coupon: cur.coupon || item.coupon,
-      total: cur.total || item.total,
-      mile_after: mile ? String(mile) : '',
-      image_problem: cur.image_problem || item.image_problem,
-      flagged: cur.flagged || item.flagged,
-      note: note
-    };
   }
-  return result;
+  return out;
 }
 
-// ตรวจคูปอง/invoice ซ้ำข้ามคัน — ถ้าซ้ำ ทำเครื่องหมายแดงให้เช็คเอง
+// ---------- ระบุรถของบิล VIP จากเลขไมล์บนบิลเทียบกับ ODO หน้าปัด ----------
+function resolveVIP(bill, dashMap) {
+  const km = toMile(bill.km);
+  const hits = [];
+  if (km) {
+    for (const c of VIP_CARS) {
+      const dm = dashMap[c];
+      if (dm && dm.odo && Math.abs(dm.odo - km) <= VIP_KM_TOLERANCE) hits.push(c);
+    }
+  }
+  if (hits.length === 1) {
+    bill.car = hits[0];
+    bill.note = noteJoin(bill.note, 'บิล VIP — ระบุรถจากเลขไมล์ตรงกับหน้าปัด ' + hits[0]);
+  } else {
+    bill.car = 'VIP — ' + VIP_CARS.join(' หรือ ');
+    bill.flagged = true;
+    bill.note = noteJoin(bill.note, 'บิล VIP ระบุรถอัตโนมัติไม่ได้ โปรดเลือกคันแล้วแก้ใน CSV');
+  }
+}
+
+// ---------- ประกอบผลลัพธ์สุดท้ายจาก bills + dashboards (deterministic ล้วน) ----------
+function assemble(rawBills, rawDash) {
+  // 1) สรุปหน้าปัด: ต่อคันเก็บ ODO สูงสุด + ธง "ไม่เติม"
+  const dashMap = {};
+  for (const r of rawDash) {
+    const d = normalizeDash(r);
+    if (!d.car) continue;
+    const cur = dashMap[d.car] || { odo: 0, no_fill: false };
+    cur.odo = Math.max(cur.odo, d.odo);
+    cur.no_fill = cur.no_fill || d.no_fill;
+    dashMap[d.car] = cur;
+  }
+
+  // 2) บิล: ทำความสะอาด → ระบุ VIP → รวมใบซ้ำ
+  let bills = rawBills.map(normalizeBill).filter(b => b.total || b.car || b.carRaw || b.unreadable);
+  for (const b of bills) if (b.isVIP) resolveVIP(b, dashMap);
+  bills = dedupeBills(bills);
+
+  const greens = bills.filter(b => b.doc === 'KJ_GREEN');
+  const whites = bills.filter(b => b.doc === 'KJ_WHITE');
+  const ptts   = bills.filter(b => b.doc === 'PTT');
+
+  // 3) จับคู่ใบขาว KJ เข้ากับบิลเขียวคันเดียวกัน (ยอดต่างกันไม่เกิน 1 บาท)
+  for (const w of whites) {
+    const g = greens.find(g => !g._white && g.car && g.car === w.car && Math.abs(g.total - w.total) < 1);
+    if (g) { g._white = true; w._used = true; if (!g.date) g.date = w.date; }
+  }
+
+  const entries = [];
+
+  // 4) บิลเขียว → รายการ KJ OIL
+  for (const g of greens) {
+    entries.push({
+      car: g.car || '-', filled: true, pump: 'KJ OIL',
+      date: g.date, coupon: g.coupon, invoice: '', total: g.total, mile_after: '',
+      image_problem: g.unreadable, flagged: g.flagged, no_fill_marked: false, note: g.note
+    });
+  }
+  // 5) ใบขาวที่ไม่มีบิลเขียวคู่ → รายการ KJ OIL คูปองว่าง (ขึ้นแดงให้คีย์เอง)
+  for (const w of whites) {
+    if (w._used) continue;
+    entries.push({
+      car: w.car || '-', filled: true, pump: 'KJ OIL',
+      date: w.date, coupon: '', invoice: '', total: w.total, mile_after: '',
+      image_problem: w.unreadable, flagged: w.flagged, no_fill_marked: false,
+      note: noteJoin(w.note, 'พบแต่ใบเสร็จขาว ไม่พบบิลเขียว — คีย์เลขคูปองเอง')
+    });
+  }
+  // 6) บิล PTT → รายการ PTT (ไมล์เอาจากบิลก่อน ถ้าไม่มีใช้ ODO หน้าปัด)
+  for (const p of ptts) {
+    const dm = dashMap[p.car];
+    entries.push({
+      car: p.car || '-', filled: true, pump: 'PTT',
+      date: p.date, coupon: '', invoice: p.invoice, total: p.total,
+      mile_after: p.km || (dm && dm.odo ? String(dm.odo) : ''),
+      image_problem: p.unreadable, flagged: p.flagged, no_fill_marked: false, note: p.note
+    });
+  }
+
+  // 7) ขัดแย้ง: มีบิลแต่หน้าปัดเขียน "ไม่เติม" → ติดธงแดงให้คนตัดสิน
+  for (const e of entries) {
+    const dm = dashMap[e.car];
+    if (dm && dm.no_fill) {
+      e.flagged = true;
+      e.note = noteJoin(e.note, '⚠️ รูปหน้าปัดเขียน "ไม่เติม" แต่พบบิลของคันนี้ — โปรดเช็ค');
+    }
+  }
+
+  // 8) คันที่มีหน้าปัดแต่ไม่มีบิลเลย → ไม่เติม
+  for (const car of Object.keys(dashMap)) {
+    if (!entries.some(e => e.car === car)) {
+      entries.push({ car: car, filled: false, no_fill_marked: dashMap[car].no_fill,
+        pump:'', date:'', invoice:'', coupon:'', total:0, mile_after:'', image_problem:false, flagged:false, note:'' });
+    }
+  }
+  return entries;
+}
+
+// ---------- ตรวจคูปอง/invoice ซ้ำข้ามรายการ (ตาข่ายนิรภัยชั้นสุดท้าย) ----------
 function flagDuplicates(list) {
   const seen = {};
   for (const d of list) {
@@ -252,8 +358,8 @@ function flagDuplicates(list) {
     for (const k of keys) {
       if (seen[k] && seen[k] !== d) {
         d.flagged = true; seen[k].flagged = true;
-        d.note = [d.note, '⚠️ ' + k + ' ซ้ำกับ ' + seen[k].car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
-        seen[k].note = [seen[k].note, '⚠️ ' + k + ' ซ้ำกับ ' + d.car + ' — โปรดเช็คบิลจริง'].filter(Boolean).join(' | ');
+        d.note = noteJoin(d.note, '⚠️ ' + k + ' ซ้ำกับ ' + seen[k].car + ' — โปรดเช็คบิลจริง');
+        seen[k].note = noteJoin(seen[k].note, '⚠️ ' + k + ' ซ้ำกับ ' + d.car + ' — โปรดเช็คบิลจริง');
       } else {
         seen[k] = d;
       }
@@ -306,67 +412,47 @@ function onFiles(fl) {
   document.getElementById('btn-row').style.display = 'flex';
 }
 
-// ========== PROMPT ==========
-const PROMPT = (fleetList) => `คุณคือระบบบัญชีน้ำมันรถบริษัท Meiwa อ่านรูปทุกรูปในชุดนี้แล้วสรุปเป็น JSON array
+// ========== PROMPT: AI เป็นแค่เครื่องคัดลอก ห้ามคิดเอง ==========
+const PROMPT = (fleetList) => `คุณคือเครื่องคัดลอกข้อมูลจากรูปถ่าย (transcriber) หน้าที่เดียวคือรายงานสิ่งที่เห็น "ทีละรูป ทีละใบ" แยกกัน
+ห้ามจับคู่ ห้ามวิเคราะห์ ห้ามสรุปว่ารถคันไหนเติมหรือไม่เติม ห้ามรวมข้อมูลข้ามรูป — ระบบจะประมวลผลต่อเอง
 
-ทะเบียนรถที่รู้จัก (เลขย่อ → ทะเบียนเต็ม):
+รายชื่อทะเบียนรถ (ใช้ช่วยอ่านลายมือเท่านั้น เลือกตัวที่ตรงกับที่เขียนบนเอกสารที่สุด):
 ${fleetList}
 
-===== กฎเหล็กข้อ 1: บิลคือแหล่งข้อมูลเดียวของรายการเติม =====
-- รายการ filled:true ทุกรายการต้องมาจากบิล/ใบเสร็จเท่านั้น
-- รถเจ้าของบิล = ทะเบียนที่เขียน/พิมพ์ "บนบิลใบนั้น" เท่านั้น ห้ามเดาจากรูปหน้าปัดที่อยู่ติดกันในชุดรูป
-- ตัวเลขเขียนมือบนบิลอาจอ่านยาก ให้เทียบกับรายการทะเบียนด้านบนแล้วเลือกตัวที่ใกล้เคียงที่สุด
-- เลขคูปอง 1 เลข เป็นของรถได้ 1 คันเท่านั้น ห้ามให้รถ 2 คันมีคูปองเลขเดียวกันเด็ดขาด
-- ใบเสร็จที่พิมพ์ซ้ำ (เลข NO: เดียวกัน หรือเลขใบกำกับเดียวกัน) = ธุรกรรมเดียว นับครั้งเดียว
+เอกสารมี 3 ชนิด:
+[PTT] สลิปมีโลโก้ pttstation / "SALE PTT Fleet" / บรรทัด TID: TRACE: APPR:
+[KJ_GREEN] บิลกระดาษสีเขียว หัวว่า "บิลเงินเชื่อ บริษัท เค เจ ออยล์ จำกัด"
+[KJ_WHITE] ใบเสร็จขาวที่มี "บจก.เค เจ ออยล์" หรือ www.bangchakmarketplace.com หรือบรรทัด "NO: xxxxxx" — ห้ามจัดเป็น PTT เด็ดขาด
 
-===== กฎเหล็กข้อ 2: แยกประเภทเอกสารให้ถูก =====
-[A] บิลเขียว KJ OIL — กระดาษสีเขียว หัวบิล "บิลเงินเชื่อ บริษัท เค เจ ออยล์ จำกัด"
-  - coupon = เลขพิมพ์มุมบนขวา หลังคำว่า "เลขที่" (เช่น 45635) อ่านให้ครบทุกหลัก
-  - car = ช่อง "ทะเบียนรถ" (เขียนมือ), date = ช่อง "วันที่", total = ช่อง "รวมยอด"
-[B] ใบเสร็จขาวของ KJ OIL/บางจาก — มีคำว่า "บจก.เค เจ ออยล์" หรือ www.bangchakmarketplace.com หรือบรรทัด "NO: xxxxxx"
-  - เป็นธุรกรรม KJ OIL (ใบประกอบของบิลเขียว) ไม่ใช่ PTT เด็ดขาด ห้ามใส่ invoice ให้
-  - ทะเบียนเขียนมือบนหัวใบใช้จับคู่รถได้
-[C] ใบเสร็จ PTT — มีโลโก้ pttstation / "SALE PTT Fleet" / มีบรรทัด TID: TRACE: APPR:
-  - invoice = เลขท้ายบิลหลังคำว่า "เลขที่" ยาว 17-20 หลัก ขึ้นต้นด้วย 1 (เช่น 126754125603090175)
-  - คัดลอก invoice ทีละหลักจนครบทุกตัว ห้ามตัดหลักท้าย ห้ามเว้นวรรค ห้ามแต่งเลขเอง
-  - car = บรรทัด "ทะเบียนรถ" บนสลิป, mile_after = "เลขระยะทาง(KM)", total = TOTAL
-- ห้ามสร้าง invoice ให้รถที่ไม่มีใบเสร็จ PTT ของตัวเองเด็ดขาด
+กฎการคัดลอก (สำคัญที่สุด):
+1. บิล 1 ใบที่เห็นในรูป = 1 แถวใน "bills" เสมอ ใบเดียวถ่ายหลายรูปก็รายงานทุกครั้ง (ระบบรวมเอง)
+2. car = ตัวหนังสือที่เขียน/พิมพ์บนใบนั้นเท่านั้น ถ้าบิลพิมพ์ว่า "VIP" ให้ตอบ "VIP" ตรงๆ ห้ามแปลงเป็นทะเบียน ห้ามเดาจากรูปอื่น
+3. ช่องไหนถูกนิ้วบัง / ถ่ายไม่ติด / เบลอ → ใส่ "" ห้ามคัดเลขจากใบอื่นมาแทนเด็ดขาด
+   ตัวอย่างที่ห้ามทำ: บิลใบหนึ่งมองไม่เห็นเลขที่ แล้วไปคัดเลขที่จากบิลใบอื่นในชุดมาใส่ — ผิดร้ายแรง
+4. invoice (เฉพาะ PTT) = ตัวเลขหลังคำว่า "เลขที่" บรรทัดล่างสุดของบิล คัดทีละหลักให้ครบ ปกติยาว 18 หลักขึ้นต้นด้วย 1
+   ถ้าเห็นไม่ครบทุกหลักให้ใส่ "" อย่าใส่เลขที่ไม่ครบ
+5. coupon (เฉพาะ KJ_GREEN) = เลขพิมพ์มุมบนขวา หลังคำว่า "เลขที่" เช่น 45635
+6. txn (เฉพาะ KJ_WHITE) = เลขหลัง "NO:" เช่น 893886
+7. km (เฉพาะ PTT) = เลขในบรรทัด "เลขระยะทาง(KM)"
+8. date = วันที่บนใบนั้น แปลง พ.ศ.→ค.ศ. (2569→26, 69→26) รูปแบบ dd/mm/yy
+9. unreadable:true เฉพาะใบที่อ่านข้อมูลหลักไม่ได้เลย (ไม่รู้ทะเบียนและไม่รู้ยอด)
 
-===== กฎเหล็กข้อ 3: รูปหน้าปัดไมล์ =====
-- รูปหน้าปัด (มีป้ายทะเบียนแปะ) ใช้บอกเลขไมล์ ODO ของรถคันนั้นเท่านั้น ห้ามสร้างรายการเติมจากรูปหน้าปัด
-- ถ้ามีเขียนคำว่า "ไม่เติม" บนรูป → no_fill_marked:true, filled:false ห้ามผูกบิลใดๆ กับคันนี้เด็ดขาด
-- หน้าปัด 2 รูปของคันเดียว: เลขมากกว่า = หลังเติม ใช้เป็น mile_after (เฉพาะรถที่มีบิล PTT)
-- รถที่มีแต่รูปหน้าปัดและไม่มีบิลในชุดนี้ → filled:false, note:"" (ชุดรูปอาจถูกแบ่งส่ง ระบบจะรวมผลให้เอง ไม่ต้องเขียนหมายเหตุ)
+รูปหน้าปัดไมล์: 1 รูป = 1 แถวใน "dashboards"
+- car = ทะเบียนจากป้ายที่แปะบนหน้าปัด, odo = เลขกิโลเมตรบนจอ
+- no_fill:true ถ้ามีเขียนคำว่า "ไม่เติม" บนรูป
 
-===== กฎเหล็กข้อ 4: ข้อมูลที่มองไม่เห็น = ไม่มี ห้ามยืม ห้ามเดา =====
-- ถ้าส่วนใดของบิลถูกนิ้วบัง / ถ่ายไม่ติด / ขาดหาย / เบลอ → ให้ field นั้นเป็น "" เท่านั้น
-- ห้ามหยิบเลขจากบิลใบอื่นในชุดมาใส่แทนเด็ดขาด ต่อให้รูปแบบเลขดูคล้ายกัน
-- ตัวอย่างที่ห้ามทำ: บิลของ 3ฒล 4531 มองไม่เห็นเลขที่ท้ายบิล แล้วไปคัดเลขที่จากบิลของ 4ฒข 4081 มาใส่ให้ 4531 — ผิดร้ายแรง ที่ถูกคือ invoice:"" และ note:"invoice ถูกบัง/อ่านไม่ได้"
-- บิลที่อ่านข้อมูลหลักได้ครบ (ทะเบียน + ยอดเงิน + วันที่) แต่ invoice หรือคูปองอ่านไม่ได้ → ยังเป็น filled:true ปกติ ห้ามใส่ image_problem แค่เว้น field นั้นว่างแล้วบอกใน note
-- image_problem:true ใช้เฉพาะกรณีอ่านข้อมูลหลักไม่ได้เลย (ไม่รู้ว่าทะเบียนอะไร หรือไม่รู้ยอดเงิน)
-
-===== บัตร PTT VIP =====
-- ใบเสร็จ PTT บางใบพิมพ์ทะเบียนรถว่า "VIP" — บัตรนี้ใช้ร่วมกัน 2 คัน: 2ฒม 1606 และ บท 7274
-- วิธีระบุคัน: เทียบ "เลขระยะทาง(KM)" บนบิล กับเลข ODO บนรูปหน้าปัดในชุด คันที่เลขใกล้เคียงกัน (ต่างกันไม่เกินหลักสิบกิโลเมตร) คือเจ้าของบิล แล้วใช้ทะเบียนจากป้ายบนหน้าปัดคันนั้น พร้อม note:"บิล VIP ระบุจากเลขไมล์"
-- ถ้าไม่มีรูปหน้าปัดให้เทียบ หรือเลขไม่ใกล้เคียงสักคัน → car:"VIP" (ระบบจะให้ผู้ใช้เลือกเอง)
-
-===== วันที่ =====
-- แปลงปี พ.ศ. เป็น ค.ศ. เสมอ: 2569→26, 69→26 ตอบรูปแบบ dd/mm/yy เช่น 09/03/26
-
-ตอบเป็น JSON array เท่านั้น ห้ามพิมพ์อะไรก่อนหรือหลัง ห้ามใช้ markdown เริ่มด้วย [ จบด้วย ] เท่านั้น:
-[{
-  "car": "ทะเบียนเต็ม",
-  "filled": true,
-  "no_fill_marked": false,
-  "pump": "PTT" หรือ "KJ OIL",
-  "date": "09/03/26",
-  "invoice": "เฉพาะ PTT: เลข 17-20 หลักขึ้นต้นด้วย 1 ครบทุกหลัก หรือ \"\" ถ้าอ่านไม่ได้",
-  "coupon": "เฉพาะ KJ OIL: เลขที่บนบิลเขียว หรือ \"\" ถ้าอ่านไม่ได้",
-  "total": 400,
-  "mile_after": "เฉพาะ PTT",
-  "image_problem": false,
-  "note": ""
-}]`;
+ตอบเป็น JSON object เดียวเท่านั้น ห้ามมีข้อความอื่น ห้าม markdown:
+{
+  "bills": [
+    {"doc":"PTT","car":"3ฒศ 3986","date":"09/03/26","total":1100,"invoice":"126754125603090175","coupon":"","txn":"","km":"135356","unreadable":false,"note":""},
+    {"doc":"KJ_GREEN","car":"1606","date":"09/03/26","total":940,"invoice":"","coupon":"45643","txn":"","km":"","unreadable":false,"note":""},
+    {"doc":"KJ_WHITE","car":"1606","date":"09/03/26","total":940,"invoice":"","coupon":"","txn":"893886","km":"","unreadable":false,"note":""}
+  ],
+  "dashboards": [
+    {"car":"3ฒน 709","odo":"114299","no_fill":false},
+    {"car":"3ฒบ 650","odo":"135239","no_fill":true}
+  ]
+}`;
 
 async function callAPI(images) {
   const fleetList = Object.entries(FLEET).map(([k,v]) => k+' → '+v).join('\n');
@@ -391,10 +477,11 @@ async function callAPI(images) {
   if (!data.content) throw new Error('Response ผิดรูปแบบ: ' + JSON.stringify(data).substring(0,200));
 
   const txt = data.content.map(i => i.text||'').join('').trim();
-  const start = txt.indexOf('[');
-  const end   = txt.lastIndexOf(']');
+  const start = txt.indexOf('{');
+  const end   = txt.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error('AI ตอบผิดรูปแบบ: ' + txt.substring(0,150));
-  return JSON.parse(txt.substring(start, end+1));
+  const obj = JSON.parse(txt.substring(start, end+1));
+  return { bills: obj.bills || [], dashboards: obj.dashboards || [] };
 }
 
 async function analyze() {
@@ -410,14 +497,19 @@ async function analyze() {
   for (let i = 0; i < imgData.length; i += BATCH_SIZE) batches.push(imgData.slice(i, i+BATCH_SIZE));
 
   try {
+    const allBills = [], allDash = [];
     for (let i = 0; i < batches.length; i++) {
       document.getElementById('progress-fill').style.width = Math.round((i/batches.length)*100)+'%';
       document.getElementById('loading-text').textContent =
-        `กำลังประมวลผล batch ${i+1}/${batches.length} (รูปที่ ${i*BATCH_SIZE+1}–${Math.min((i+1)*BATCH_SIZE,imgData.length)})...`;
-      parsed = mergeParsed(parsed, await callAPI(batches[i]));
+        `กำลังอ่านรูป batch ${i+1}/${batches.length} (รูปที่ ${i*BATCH_SIZE+1}–${Math.min((i+1)*BATCH_SIZE,imgData.length)})...`;
+      const r = await callAPI(batches[i]);
+      allBills.push(...r.bills);
+      allDash.push(...r.dashboards);
     }
-    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('loading-text').textContent = 'กำลังจับคู่บิลกับรถ...';
+    parsed = assemble(allBills, allDash);
     flagDuplicates(parsed);
+    document.getElementById('progress-fill').style.width = '100%';
     renderResults(parsed);
   } catch(e) {
     document.getElementById('results').innerHTML = '<div class="error">เกิดข้อผิดพลาด: '+e.message+'</div>';
